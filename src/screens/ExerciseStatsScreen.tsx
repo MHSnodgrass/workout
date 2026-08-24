@@ -37,7 +37,7 @@ export default function ExerciseStatsScreen() {
 
   if (!exercise || history === undefined) return <div className="screen">Loading…</div>;
 
-  // Recharts takes concrete colours, so the accent is resolved here rather
+  // Recharts takes concrete colors, so the accent is resolved here rather
   // than inherited from the CSS token the rest of the UI uses.
   const accent = resolveAccent(accentId).value;
 

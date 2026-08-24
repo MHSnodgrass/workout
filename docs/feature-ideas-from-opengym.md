@@ -7,11 +7,15 @@ mechanics, not code (AGPL — clean-room implementations only).
 
 Reviewed 2026-08-24. Ordered roughly by value-for-effort within each tier.
 
+**Status as of 2026-08-24** — shipped: #1, #3, #4, #5, #7, #9, and #2 in part
+(accents only). Remaining: #2's light mode, #6, #8, #10–#14. Each item below
+is marked, with a note on what actually landed where it differs from the plan.
+
 ---
 
 ## Tier 1 — Quick wins (an evening each)
 
-### 1. Screen wake lock during workouts
+### 1. Screen wake lock during workouts — ✅ shipped
 Keep the screen awake while a session is active so the phone doesn't lock
 between sets; release on finish. openGym makes this toggleable in Settings.
 - **How:** `navigator.wakeLock.request('screen')` in `ActiveWorkout`,
@@ -20,33 +24,50 @@ between sets; release on finish. openGym makes this toggleable in Settings.
 - **Why:** Removes the biggest friction in our logging flow — unlocking the
   phone every set. Also makes the rest-timer bar reliably visible, which
   papers over the PWA's weakest spot (no background alarms).
+- **Landed as planned.** Controller in `src/lib/wakeLock.ts` (plain TS, so
+  the re-acquire-on-`visibilitychange` logic is testable in node), hook in
+  `useWakeLock.ts`. Settings key `keepAwake`, default on.
 
-### 2. Theme accents + light mode
+### 2. Theme accents + light mode — ◑ accents shipped, light mode skipped
 openGym ships light/dark themes with 8 accent colors, saved per profile.
 - **How:** Our CSS is already token-based (`--accent`, `--bg`, …). Add a
   light palette and 4–6 accent choices in Settings; persist in `settings`.
 - **Why:** Cheap personality. The dark theme is currently the only option.
+- **Landed, partly.** Six accents in `src/lib/theme.ts`, key `accent`.
+  **Light mode was deliberately skipped** — still open if wanted.
+  Each accent ships its own `--accent-ink`: white on the lighter accents
+  fails contrast, so the button-label color travels with the accent, and
+  the contrast floors are asserted in `theme.test.ts`. No red accent —
+  red already means destructive, and matching it blunts the delete buttons.
 
-### 3. Consistent icon set
+### 3. Consistent icon set — ✅ shipped
 openGym uses hand-drawn icons instead of emoji for cross-platform consistency.
 Our UI uses text glyphs (✕ ▲ ▼ ✓) which render inconsistently.
 - **How:** Inline SVG icons (hand-rolled or `lucide-react`) for check, delete,
   reorder, edit, timer.
 - **Why:** Sharper look on the Fold, no emoji-font lottery.
+- **Landed** with `lucide-react`. Icon-only buttons gained `aria-label`s
+  and the app gained `:focus-visible` outlines, which it had none of.
+  `ConfirmButton`'s armed state stays the word "Sure?" — an icon can't
+  ask a question.
 
-### 4. In-set work timer for timed exercises
+### 4. In-set work timer for timed exercises — ✅ shipped
 openGym runs a count-up work timer *during* a timed set (plank, carry), then
 logs the actual time held — separate from the rest timer.
 - **How:** On a timed exercise's pending row, replace the seconds input with
   a start/stop stopwatch button that fills `durationSeconds` on stop
   (editable before ✓). Reuses the `RestTimerBar` ticking pattern.
 - **Why:** Nobody wants to count plank seconds in their head and type them in.
+- **Landed differently:** the stopwatch sits *beside* the seconds input
+  rather than replacing it, so the field is always visible and editable.
+  Confirming a running set stops it and logs the elapsed value. Stored as
+  a start timestamp, so backgrounding the app can't lose time.
 
 ---
 
 ## Tier 2 — The big one: progression intelligence
 
-### 5. Double-progression suggestions ⭐ highest value steal
+### 5. Double-progression suggestions — ✅ shipped (stall/deload not done)
 openGym's core loop: progression schemes tell you what to attempt today.
 **Double progression** fits our data model perfectly since routine exercises
 already have rep ranges (`targetRepsMin`/`targetRepsMax`):
@@ -67,8 +88,13 @@ already have rep ranges (`targetRepsMin`/`targetRepsMax`):
 - **Later options (only if wanted):** stall detection after N failed
   attempts → suggest a deload (openGym: missed reps never advance load;
   stalls auto-deload ~10%).
+- **Landed** in `src/lib/progression.ts`. The working weight is the
+  *lightest* of the target sets — the load actually completed for every
+  set — so a ramped session progresses from its base, not its top single.
+  Increment is per-exercise (`Exercise.incrementLbs`) over a global
+  `defaultIncrementLbs`. **Stall detection / deload was not built.**
 
-### 6. Optional RIR/RPE effort column
+### 6. Optional RIR/RPE effort column — ☐ not started
 Third per-set field: reps-in-reserve (or RPE). openGym keeps it independent
 of progression math.
 - **How:** Optional `rir` on `SetLog` (Dexie is schemaless-ish — additive
@@ -81,13 +107,19 @@ of progression math.
 
 ## Tier 3 — Stats & visualization
 
-### 7. GitHub-style activity heatmap
+### 7. GitHub-style activity heatmap — ✅ shipped
 Year grid on the Stats (or Home) screen shaded by training volume/time per day.
 - **How:** Pure derivation from `sessions` (count sets or duration per day).
   Render as a CSS grid of little squares — no chart library needed.
 - **Why:** The single most motivating "don't break the streak" visual.
+- **Landed** in `src/lib/heatmap.ts` + `components/Heatmap.tsx`, at the top
+  of Stats. Shades by **sets logged** — the only measure that behaves across
+  weighted, bodyweight and timed work. Levels are relative to the busiest
+  day, not quartiles: quartiles collapse a year of similar sessions into the
+  lowest band. Days bucket by *local* date. Month labels were added because
+  the per-day tooltips never appear on a phone.
 
-### 8. Muscle-group coverage map
+### 8. Muscle-group coverage map — ☐ not started
 openGym shows front/back body figures shaded by weekly/monthly work, plus a
 preview while building routines ("this plan misses hamstrings").
 - **How:** Requires tagging each exercise with muscle groups — add optional
@@ -98,17 +130,22 @@ preview while building routines ("this plan misses hamstrings").
   editing routines. The SVG figure is polish; the per-group set counts are
   the value.
 
-### 9. Named best-set on the 1RM stat
+### 9. Named best-set on the 1RM stat — ✅ shipped
 openGym's est. 1RM display names which set produced it ("185×5 on Aug 12").
 - **How:** `bestE1RM` already finds the set — return it and render it under
   the records card.
 - **Why:** Ten-line change; makes the number trustworthy.
+- **Landed, but bigger than ten lines.** Records derived from session-level
+  aggregates, so "which set" didn't exist for all metrics. `bestOccurrence()`
+  in `metrics.ts` now returns `{ value, session, set? }`: est. 1RM / top set /
+  max duration name the set, while volume and total reps are session totals
+  and name only the date.
 
 ---
 
 ## Tier 4 — Bigger lifts (decide deliberately before starting)
 
-### 10. Seeded exercise library
+### 10. Seeded exercise library — ☐ not started
 openGym ships 1,324 exercises with animated demos and equipment filters.
 - **How for us:** Import a permissively-licensed dataset (e.g.
   [free-exercise-db](https://github.com/yuhonas/free-exercise-db), public
@@ -119,19 +156,19 @@ openGym ships 1,324 exercises with animated demos and equipment filters.
   for free; but Matthew's library is self-defined and small — only worth it
   if #8 is wanted without manual tagging.
 
-### 11. Supersets
+### 11. Supersets — ☐ not started
 Pair two exercises, alternate their set rows, one rest after the pair.
 - **How:** `supersetGroup` field on `RoutineExercise`; logging screen
   interleaves cards. Was deliberately cut from v1 — revisit only if the
   actual training style changes.
 
-### 12. Weekly schedule ("today is Workout B day")
+### 12. Weekly schedule ("today is Workout B day") — ☐ not started
 openGym assigns routines to weekdays; Home would highlight today's plan.
 - **How:** Optional `weekday` on `Routine`; Home sorts/badges today's
   routine. Skip openGym's reschedule machinery — our "last done X days ago"
   already covers the flexible-schedule case.
 
-### 13. Body-weight tracking with goal line
+### 13. Body-weight tracking with goal line — ☐ not started
 Weight log + chart with goal-line coloring; openGym even prompts at session
 start.
 - **How:** New `bodyWeights` table, small entry field on Home or Settings,
@@ -139,7 +176,7 @@ start.
 - **Why/why not:** Was cut from v1 as scope creep; it's cheap and the chart
   infra exists. Add when wanted.
 
-### 14. Rest-timer push notification when backgrounded
+### 14. Rest-timer push notification when backgrounded — ☐ not started
 openGym (having a server) pushes rest-alerts even when the app is closed.
 - **Reality check for us:** without a push server, a static PWA can only
   fire a notification from the service worker while it's alive; true
@@ -163,10 +200,25 @@ openGym (having a server) pushes rest-alerts even when the app is closed.
 
 ---
 
-## Suggested order if we start pulling from this list
+## What's left
 
-1. **#1 wake lock** + **#4 work timer** (one session, transforms gym usability)
-2. **#5 progression suggestions** (the headline feature)
-3. **#7 heatmap** + **#9 named best set** (stats polish)
-4. **#2 themes** / **#3 icons** (look & feel pass)
-5. Everything else on demand.
+Tiers 1-3 are done apart from the two below; everything remaining is a
+deliberate decision rather than a queue.
+
+1. **#6 RIR/RPE column** — smallest remaining item. Additive `rir` on
+   `SetLog`; bump the backup `schemaVersion`.
+2. **#8 muscle-group coverage** — needs `muscleGroups[]` on `Exercise` and
+   the tagging UI to go with it. Start with per-group set counts.
+3. **#13 body-weight tracking** — cheap now: Recharts is already lazy-loaded,
+   so a second chart costs nothing on the logging path.
+4. **#2's light mode** — the accent half shipped; the light palette didn't.
+5. **#12 weekday schedule** — small, makes Home answer "what's today".
+6. **#10 seeded library**, **#11 supersets**, **#14 push notifications** —
+   still the deliberate-decision pile. #14 remains mostly obsoleted by #1.
+
+### Conventions these were built to
+- Pure logic lives in `src/lib/` with vitest tests; TDD.
+- Components are **not** unit-tested — the repo has no jsdom or
+  testing-library. UI is verified by driving the real app instead.
+- `vite.config.ts` sets `environment: 'node'`; keep new logic node-testable.
+- Recharts is lazy-loaded via the stats routes. Keep it off the logging path.
