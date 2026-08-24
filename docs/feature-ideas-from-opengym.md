@@ -8,8 +8,8 @@ mechanics, not code (AGPL — clean-room implementations only).
 Reviewed 2026-08-24. Ordered roughly by value-for-effort within each tier.
 
 **Status as of 2026-08-24** — shipped: #1–#9, #12, #13, #15. Remaining: #10,
-#11, #14 — the deliberate-decision pile, nothing more. Each item below
-is marked, with a note on what actually landed where it differs from the plan.
+#11 and #14. Each item below is marked, with a note on what actually landed
+where it differs from the plan.
 
 ---
 
@@ -185,12 +185,31 @@ openGym ships 1,324 exercises with animated demos and equipment filters.
 - **Why/why not:** Nice for discovering exercises + gets muscle tags (#8)
   for free; but Matthew's library is self-defined and small — only worth it
   if #8 is wanted without manual tagging.
+- **State as of 2026-08-24 — chosen, not yet designed.** The rationale above
+  has shifted: #8 shipped *with* manual tagging, so this is no longer the
+  only route to muscle data. What it's now worth is discovery, and killing
+  the tagging chore for anything new.
+  Open questions to settle before coding: whether the dataset ships in the
+  bundle or as a lazy chunk (it's ~1,300 entries — this is the whole
+  decision, since the logging path must stay light); how free-exercise-db's
+  `primaryMuscles`/`secondaryMuscles` map onto our fixed ten in
+  `lib/muscles.ts`; and whether a picked entry is copied into `exercises`
+  (keeping backups self-contained, as planned) or referenced by id.
 
 ### 11. Supersets — ☐ not started
 Pair two exercises, alternate their set rows, one rest after the pair.
 - **How:** `supersetGroup` field on `RoutineExercise`; logging screen
   interleaves cards. Was deliberately cut from v1 — revisit only if the
   actual training style changes.
+- **State as of 2026-08-24 — chosen, not yet designed.** Things that have
+  changed under it since it was cut, and that a design has to answer:
+  rest is currently started per exercise by `onSetLogged(defaultRestSeconds)`
+  in `LoggingScreen`, so "one rest after the pair" means the trigger moves
+  from the set to the group. Progression (`suggestNext`) is per exercise and
+  should stay that way — a superset changes the *order* sets are performed,
+  not what each lift should be loaded to. Also needs deciding: whether the
+  pair renders as one merged card or two linked cards, and what happens when
+  the two exercises have different `targetSets`.
 
 ### 12. Weekly schedule ("today is Workout B day") — ✅ shipped
 openGym assigns routines to weekdays; Home would highlight today's plan.
@@ -225,13 +244,27 @@ start.
   moved out of `heatmap.ts` into `src/lib/dates.ts`.
 - **Not done:** openGym's prompt-at-session-start. Home is enough.
 
-### 14. Rest-timer push notification when backgrounded — ☐ not started
-openGym (having a server) pushes rest-alerts even when the app is closed.
-- **Reality check for us:** without a push server, a static PWA can only
-  fire a notification from the service worker while it's alive; true
-  scheduled notifications (Notification Triggers API) still aren't broadly
-  available. **#1 (wake lock) mostly obsoletes this.** Revisit only if wake
-  lock proves insufficient.
+### 14. Rest-timer alert when you've switched away — ☐ not started
+**What it is, plainly:** you finish a set, the rest timer starts, you switch
+to Instagram or your phone screen goes off — and right now nothing tells you
+rest is up. The timer only counts while the app is on screen. This would buzz
+or ping you when it hits zero regardless of what you're looking at.
+- **What's actually achievable here** (openGym has a server; we don't):
+  - **Realistic:** while the app is merely backgrounded — screen still on,
+    you're in another app — a service worker can usually still fire a
+    notification, and `navigator.vibrate` already runs when the tab is
+    visible. This covers the common case.
+  - **Not achievable:** a guaranteed alarm after the phone has been locked
+    for minutes. Browsers suspend background timers, there's no push server
+    to wake us, and the API for genuinely *scheduled* notifications isn't
+    broadly supported. Anything promising that would be lying.
+  - **Caveat worth knowing before building:** #1's wake lock keeps the screen
+    on during a workout, so in the intended flow — phone propped up, screen
+    awake — the timer is already visible and this adds nothing. It earns its
+    keep specifically when you leave the app mid-rest.
+- **Would need:** notification permission (asked once, in Settings, not on
+  first load), a Settings toggle, and honest copy about the lock-screen
+  limit so it isn't relied on for a heavy set.
 
 ---
 
@@ -301,8 +334,12 @@ Added and done 2026-08-24. The app worked but read as generic dark-Bootstrap
 Every feature worth stealing has been stolen, and the design pass is done.
 What's left is only the deliberate-decision pile:
 
-1. **#10 seeded library**, **#11 supersets**, **#14 push notifications** —
-   unchanged. #14 stays mostly obsoleted by #1.
+1. **#10 seeded exercise library** and **#11 supersets** — both need a
+   decision before any code. These are next.
+2. **#14 rest alert when you've switched away** — kept in scope. Read that
+   entry before scoping it: the backgrounded case is doable, a guaranteed
+   lock-screen alarm is not, and the wake lock already covers the flow where
+   the phone stays propped up and awake.
 
 Smaller unbuilt pieces, noted where they belong: #8's routine-balance
 preview and body figures, #13's prompt-at-session-start, and deloads for
