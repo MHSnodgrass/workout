@@ -69,5 +69,9 @@ export function formatSet(set: SetLog, type: ExerciseType): string {
 
 export function targetLabel(re: RoutineExercise, type: ExerciseType): string {
   if (type === 'timed') return `${re.targetSets} × ${re.targetDurationSeconds ?? 0}s`;
-  return `${re.targetSets} × ${re.targetRepsMin ?? 0}–${re.targetRepsMax ?? 0}`;
+  const min = re.targetRepsMin ?? 0;
+  const max = re.targetRepsMax ?? 0;
+  // A fixed target is written 3 × 5, not 3 × 5–5 — the range of one reads as a
+  // mistake. Straight-set programs make this the common case, not the odd one.
+  return `${re.targetSets} × ${min === max ? min : `${min}–${max}`}`;
 }

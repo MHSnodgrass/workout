@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, type Exercise } from '../db/db';
+import { db, type Exercise, type Routine } from '../db/db';
 import {
   createRoutine,
   deleteExercise,
@@ -10,8 +10,10 @@ import {
   updateExercise,
 } from '../db/mutations';
 import { getSetting } from '../db/settings';
+import { installStarterProgram } from '../db/starterProgram';
 import { MUSCLE_GROUPS } from '../lib/muscles';
 import { DEFAULT_BAR_LBS } from '../lib/plates';
+import { STARTER_ROUTINES, installSummary } from '../lib/starterProgram';
 import ConfirmButton from '../components/ConfirmButton';
 import { useToast } from '../components/Toast';
 
@@ -62,11 +64,56 @@ export default function RoutinesScreen() {
         ))}
         {routines?.length === 0 && <p className="muted">No routines yet — add one above.</p>}
       </div>
+      <StarterProgramCard routines={routines} />
       <h2 className="section">Exercise library</h2>
       {exercises?.map((e) => <ExerciseLibRow key={e.id} exercise={e} />)}
       {exercises?.length === 0 && (
         <p className="muted">Exercises appear here once you add them to a routine.</p>
       )}
+    </div>
+  );
+}
+
+/**
+ * A three-day program to start from, for anyone who doesn't want to build one
+ * from an empty screen. Hidden once all three of its routines exist, since by
+ * then the button has nothing left to do.
+ */
+function StarterProgramCard({ routines }: { routines: Routine[] | undefined }) {
+  const toast = useToast();
+  const [installing, setInstalling] = useState(false);
+  if (!routines) return null;
+
+  const have = new Set(routines.map((r) => r.name.toLowerCase()));
+  const missing = STARTER_ROUTINES.filter((s) => !have.has(s.name.toLowerCase()));
+  if (missing.length === 0) return null;
+  const partial = `the ${missing.length === 1 ? 'routine' : `${missing.length} routines`} you're missing`;
+
+  async function install() {
+    setInstalling(true);
+    try {
+      toast(installSummary(await installStarterProgram()));
+    } catch {
+      toast("Couldn't add the starter program");
+    } finally {
+      setInstalling(false);
+    }
+  }
+
+  return (
+    <div className="card">
+      <strong>Starter program</strong>
+      <p className="small">
+        Three days a week: squat and bench Monday, deadlift and press Wednesday, bench and volume
+        Friday. Linear progression — every session a lift comes up, it goes up.
+      </p>
+      <p className="small">
+        Adds {missing.length === STARTER_ROUTINES.length ? 'three routines' : partial} and the
+        exercises they need. Anything you already have by name is reused exactly as you have it.
+      </p>
+      <button className="primary" disabled={installing} onClick={() => void install()}>
+        {installing ? 'Adding…' : 'Add starter program'}
+      </button>
     </div>
   );
 }

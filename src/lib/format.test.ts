@@ -80,6 +80,15 @@ describe('targetLabel', () => {
       ),
     ).toBe('3 × 60s');
   });
+
+  it('collapses a fixed rep target instead of printing a range of one', () => {
+    expect(
+      targetLabel(
+        { routineId: 1, exerciseId: 1, order: 1, targetSets: 3, targetRepsMin: 5, targetRepsMax: 5 },
+        'weighted',
+      ),
+    ).toBe('3 × 5');
+  });
 });
 
 describe('round1', () => {
