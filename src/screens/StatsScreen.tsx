@@ -3,9 +3,15 @@ import { Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import { formatDaysAgo } from '../lib/format';
+import { buildHeatmap } from '../lib/heatmap';
+import Heatmap from '../components/Heatmap';
 
 export default function StatsScreen() {
   const [q, setQ] = useState('');
+  const heatmap = useLiveQuery(async () => {
+    const logs = await db.setLogs.toArray();
+    return buildHeatmap(logs, Date.now());
+  }, []);
   const list = useLiveQuery(async () => {
     const exercises = await db.exercises.filter((e) => e.archived === 0).toArray();
     const withLast = await Promise.all(
@@ -24,6 +30,7 @@ export default function StatsScreen() {
   return (
     <div className="screen">
       <h1>Stats</h1>
+      {heatmap && <Heatmap data={heatmap} />}
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search exercises" />
       <div style={{ marginTop: 12 }}>
         {filtered?.map(({ exercise, lastAt }) => (

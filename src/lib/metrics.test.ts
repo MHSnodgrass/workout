@@ -3,6 +3,7 @@ import type { SessionSets } from '../db/queries';
 import {
   availableMetricsFor,
   bestE1RM,
+  bestOccurrence,
   buildSeries,
   defaultMetricFor,
   epley1RM,
@@ -80,5 +81,73 @@ describe('buildSeries', () => {
     const series = buildSeries(history, 'topWeight');
     expect(series.map((p) => p.sessionId)).toEqual([1, 2, 3]);
     expect(series.map((p) => p.isPR)).toEqual([true, true, false]);
+  });
+});
+
+describe('bestOccurrence', () => {
+  function session(id: number, startedAt: number, rows: Array<[number, number]>): SessionSets {
+    return {
+      session: { id, routineId: 1, startedAt, finishedAt: startedAt + 3600 },
+      sets: rows.map(([weightLbs, reps], i) => ({
+        id: id * 100 + i,
+        sessionId: id,
+        exerciseId: 1,
+        setNumber: i + 1,
+        weightLbs,
+        reps,
+        loggedAt: startedAt,
+      })),
+    };
+  }
+
+  const history: SessionSets[] = [
+    session(1, 1_000, [
+      [135, 10],
+      [135, 10],
+    ]),
+    session(2, 2_000, [
+      [185, 5],
+      [155, 8],
+    ]),
+  ];
+
+  it('names the set behind a set-level record', () => {
+    const best = bestOccurrence('topWeight', history);
+
+    expect(best?.value).toBe(185);
+    expect(best?.set?.weightLbs).toBe(185);
+    expect(best?.session.id).toBe(2);
+  });
+
+  it('names the set behind the best estimated 1RM', () => {
+    const best = bestOccurrence('e1rm', history);
+
+    expect(best?.set).toEqual(expect.objectContaining({ weightLbs: 185, reps: 5 }));
+  });
+
+  it('names only the session for a session-level record', () => {
+    const best = bestOccurrence('volume', history);
+
+    // Session 2 totals 185*5 + 155*8 = 2165, beating session 1's 2700? No:
+    // session 1 is 135*10 + 135*10 = 2700, so session 1 holds the record.
+    expect(best?.value).toBe(2700);
+    expect(best?.session.id).toBe(1);
+    expect(best?.set).toBeUndefined();
+  });
+
+  it('credits the earliest session when a record is tied', () => {
+    const tied = [session(1, 1_000, [[200, 3]]), session(2, 2_000, [[200, 3]])];
+
+    expect(bestOccurrence('topWeight', tied)?.session.id).toBe(1);
+  });
+
+  it('returns nothing when there is no history', () => {
+    expect(bestOccurrence('e1rm', [])).toBeNull();
+  });
+
+  it('returns nothing when no set carries the metric', () => {
+    const durationless = [session(1, 1_000, [[135, 10]])];
+
+    expect(bestOccurrence('maxDuration', durationless)).toBeNull();
   });
 });

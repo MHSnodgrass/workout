@@ -14,11 +14,14 @@ import { db, type ExerciseType, type SetLog } from '../db/db';
 import { getExerciseHistory, type SessionSets } from '../db/queries';
 import {
   availableMetricsFor,
+  bestOccurrence,
   buildSeries,
   defaultMetricFor,
   type MetricKey,
   type SessionPoint,
 } from '../lib/metrics';
+import { getSetting } from '../db/settings';
+import { DEFAULT_ACCENT_ID, resolveAccent } from '../lib/theme';
 import { deleteSession, deleteSet, updateSet } from '../db/mutations';
 import { formatDate, formatSet, formatShortDate, metricLabel, round1 } from '../lib/format';
 import ConfirmButton from '../components/ConfirmButton';
@@ -29,9 +32,14 @@ export default function ExerciseStatsScreen() {
   const eid = Number(exerciseId);
   const exercise = useLiveQuery(() => db.exercises.get(eid), [eid]);
   const history = useLiveQuery(() => getExerciseHistory(eid), [eid]);
+  const accentId = useLiveQuery(() => getSetting<string>('accent', DEFAULT_ACCENT_ID), []);
   const [metricOverride, setMetricOverride] = useState<MetricKey | null>(null);
 
   if (!exercise || history === undefined) return <div className="screen">Loading…</div>;
+
+  // Recharts takes concrete colours, so the accent is resolved here rather
+  // than inherited from the CSS token the rest of the UI uses.
+  const accent = resolveAccent(accentId).value;
 
   const metric = metricOverride ?? defaultMetricFor(exercise.type);
   const series = buildSeries(history, metric);
@@ -68,8 +76,8 @@ export default function ExerciseStatsScreen() {
                 <Line
                   type="monotone"
                   dataKey="value"
-                  stroke="#4f8ef7"
-                  dot={<PRDot />}
+                  stroke={accent}
+                  dot={<PRDot accent={accent} />}
                   isAnimationActive={false}
                 />
               </LineChart>
@@ -83,11 +91,16 @@ export default function ExerciseStatsScreen() {
   );
 }
 
-function PRDot(props: { cx?: number; cy?: number; payload?: SessionPoint }) {
-  const { cx, cy, payload } = props;
+function PRDot(props: { cx?: number; cy?: number; payload?: SessionPoint; accent?: string }) {
+  const { cx, cy, payload, accent } = props;
   if (cx === undefined || cy === undefined || !payload) return null;
   return (
-    <circle cx={cx} cy={cy} r={payload.isPR ? 5 : 3} fill={payload.isPR ? '#f5a623' : '#4f8ef7'} />
+    <circle
+      cx={cx}
+      cy={cy}
+      r={payload.isPR ? 5 : 3}
+      fill={payload.isPR ? '#f5a623' : (accent ?? '#4f8ef7')}
+    />
   );
 }
 
@@ -95,11 +108,15 @@ function Records({ history, type }: { history: SessionSets[]; type: ExerciseType
   return (
     <div className="card small">
       {availableMetricsFor(type).map((m) => {
-        const points = buildSeries(history, m);
-        const best = Math.max(...points.map((p) => p.value), 0);
+        const best = bestOccurrence(m, history);
+        if (best === null) return null;
         return (
           <div key={m}>
-            Best {metricLabel(m)}: <strong>{round1(best)}</strong>
+            Best {metricLabel(m)}: <strong>{round1(best.value)}</strong>{' '}
+            <span className="best-set">
+              — {best.set ? `${formatSet(best.set, type)} on ` : ''}
+              {formatDate(best.session.startedAt)}
+            </span>
           </div>
         );
       })}

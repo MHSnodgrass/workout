@@ -54,5 +54,18 @@ button svg { display: block; }
 .rest-bar { position: fixed; bottom: 52px; left: 0; right: 0; display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: var(--surface); border-top: 1px solid var(--border); z-index: 10; }
 .rest-bar.done { background: var(--accent); color: var(--accent-ink); }
 .rest-time { flex: 1; font-size: 20px; font-variant-numeric: tabular-nums; font-weight: 600; }
+.heatmap-scroll { overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+.heatmap-scroll::-webkit-scrollbar { height: 6px; }
+.heatmap-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+.heatmap-months { display: grid; grid-template-columns: repeat(53, 14px); width: max-content; font-size: 10px; color: var(--muted); margin-bottom: 4px; }
+.heatmap-months span { grid-row: 1; white-space: nowrap; }
+.heatmap { display: flex; gap: 3px; width: max-content; }
+.heatmap-week { display: flex; flex-direction: column; gap: 3px; }
+.heatmap-day { width: 11px; height: 11px; border-radius: 2px; background: var(--border); }
+.heatmap-day.level-1 { background: var(--accent); opacity: 0.3; }
+.heatmap-day.level-2 { background: var(--accent); opacity: 0.5; }
+.heatmap-day.level-3 { background: var(--accent); opacity: 0.75; }
+.heatmap-day.level-4 { background: var(--accent); }
+.best-set { color: var(--muted); }
 .pr-card { border-color: var(--pr); }
 .banner { background: var(--surface); border: 1px solid var(--pr); border-radius: 12px; padding: 12px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }

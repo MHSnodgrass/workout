@@ -1,4 +1,4 @@
-import type { ExerciseType, SetLog } from '../db/db';
+import type { ExerciseType, Session, SetLog } from '../db/db';
 import type { SessionSets } from '../db/queries';
 
 export type MetricKey = 'e1rm' | 'topWeight' | 'volume' | 'totalReps' | 'maxDuration';
@@ -68,6 +68,54 @@ export function availableMetricsFor(type: ExerciseType): MetricKey[] {
     case 'timed':
       return ['maxDuration'];
   }
+}
+
+/** Metrics that a single set can own; the rest are session totals. */
+const SET_LEVEL_METRICS: MetricKey[] = ['e1rm', 'topWeight', 'maxDuration'];
+
+function setValue(metric: MetricKey, set: SetLog): number {
+  switch (metric) {
+    case 'e1rm':
+      return set.weightLbs !== undefined && set.reps !== undefined
+        ? epley1RM(set.weightLbs, set.reps)
+        : 0;
+    case 'topWeight':
+      return set.weightLbs ?? 0;
+    case 'maxDuration':
+      return set.durationSeconds ?? 0;
+    default:
+      return 0;
+  }
+}
+
+export interface BestOccurrence {
+  value: number;
+  session: Session;
+  /** The set that produced it — absent for metrics that are session totals. */
+  set?: SetLog;
+}
+
+/**
+ * The record for a metric, plus where it happened. Ties go to the earliest
+ * session: a record belongs to the day it was first set, not the last time it
+ * was matched.
+ */
+export function bestOccurrence(metric: MetricKey, history: SessionSets[]): BestOccurrence | null {
+  const oldestFirst = [...history].sort((a, b) => a.session.startedAt - b.session.startedAt);
+  let best: BestOccurrence | null = null;
+
+  for (const { session, sets } of oldestFirst) {
+    if (SET_LEVEL_METRICS.includes(metric)) {
+      for (const set of sets) {
+        const value = setValue(metric, set);
+        if (value > 0 && (best === null || value > best.value)) best = { value, session, set };
+      }
+    } else {
+      const value = metricValue(metric, sets);
+      if (value > 0 && (best === null || value > best.value)) best = { value, session };
+    }
+  }
+  return best;
 }
 
 export interface SessionPoint {
