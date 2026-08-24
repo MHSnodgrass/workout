@@ -7,6 +7,7 @@ import { getActiveSession, getLastFinishedSessionDate } from '../db/queries';
 import { startSession } from '../db/mutations';
 import { getSetting } from '../db/settings';
 import { formatDaysAgo } from '../lib/format';
+import BodyWeightInput from '../components/BodyWeightInput';
 import { useToast } from '../components/Toast';
 
 export default function HomeScreen() {
@@ -79,6 +80,7 @@ export default function HomeScreen() {
       {routines?.length === 0 && (
         <p className="muted">Create a routine in the Routines tab to get started.</p>
       )}
+      <BodyWeightInput />
     </div>
   );
 }

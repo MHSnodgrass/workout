@@ -1,8 +1,17 @@
 import { db } from './db';
-import type { Exercise, Routine, RoutineExercise, Session, SetLog, Setting } from './db';
+import type {
+  BodyWeight,
+  Exercise,
+  Routine,
+  RoutineExercise,
+  Session,
+  SetLog,
+  Setting,
+} from './db';
 
 export const BACKUP_APP = 'workout-tracker';
-export const SCHEMA_VERSION = 1;
+/** 2 added optional per-set `rir` and the `bodyWeights` table. */
+export const SCHEMA_VERSION = 2;
 
 export interface BackupFile {
   app: string;
@@ -14,6 +23,8 @@ export interface BackupFile {
   sessions: Session[];
   setLogs: SetLog[];
   settings: Setting[];
+  /** Absent in schemaVersion 1 files. */
+  bodyWeights?: BodyWeight[];
 }
 
 export async function buildBackup(): Promise<BackupFile> {
@@ -27,11 +38,14 @@ export async function buildBackup(): Promise<BackupFile> {
     sessions: await db.sessions.toArray(),
     setLogs: await db.setLogs.toArray(),
     settings: await db.settings.toArray(),
+    bodyWeights: await db.bodyWeights.toArray(),
   };
 }
 
 export type ValidationResult = { ok: true; data: BackupFile } | { ok: false; error: string };
 
+// bodyWeights is deliberately absent: it arrived in schemaVersion 2, and every
+// file written before then is still a valid backup.
 const TABLE_KEYS = [
   'exercises',
   'routines',
@@ -52,6 +66,9 @@ export function validateBackup(raw: unknown): ValidationResult {
   }
   for (const key of TABLE_KEYS) {
     if (!Array.isArray(d[key])) return { ok: false, error: `Missing or invalid "${key}"` };
+  }
+  if (d.bodyWeights !== undefined && !Array.isArray(d.bodyWeights)) {
+    return { ok: false, error: 'Missing or invalid "bodyWeights"' };
   }
   for (const row of d.exercises as unknown[]) {
     const e = row as Record<string, unknown>;
@@ -77,7 +94,15 @@ export function validateBackup(raw: unknown): ValidationResult {
 export async function importBackup(backup: BackupFile): Promise<void> {
   await db.transaction(
     'rw',
-    [db.exercises, db.routines, db.routineExercises, db.sessions, db.setLogs, db.settings],
+    [
+      db.exercises,
+      db.routines,
+      db.routineExercises,
+      db.sessions,
+      db.setLogs,
+      db.settings,
+      db.bodyWeights,
+    ],
     async () => {
       await Promise.all([
         db.exercises.clear(),
@@ -86,6 +111,7 @@ export async function importBackup(backup: BackupFile): Promise<void> {
         db.sessions.clear(),
         db.setLogs.clear(),
         db.settings.clear(),
+        db.bodyWeights.clear(),
       ]);
       await db.exercises.bulkAdd(backup.exercises);
       await db.routines.bulkAdd(backup.routines);
@@ -93,6 +119,7 @@ export async function importBackup(backup: BackupFile): Promise<void> {
       await db.sessions.bulkAdd(backup.sessions);
       await db.setLogs.bulkAdd(backup.setLogs);
       await db.settings.bulkAdd(backup.settings);
+      await db.bodyWeights.bulkAdd(backup.bodyWeights ?? []);
     },
   );
 }

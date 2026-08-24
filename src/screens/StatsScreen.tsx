@@ -2,12 +2,16 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
-import { formatDaysAgo } from '../lib/format';
+import { getBodyWeights } from '../db/bodyWeights';
+import { describeTrend, weightTrend } from '../lib/bodyWeight';
+import { formatDaysAgo, round1 } from '../lib/format';
 import { buildHeatmap } from '../lib/heatmap';
 import Heatmap from '../components/Heatmap';
 
 export default function StatsScreen() {
   const [q, setQ] = useState('');
+  const weights = useLiveQuery(getBodyWeights, []);
+  const trend = weights ? weightTrend(weights, Date.now()) : null;
   const heatmap = useLiveQuery(async () => {
     const logs = await db.setLogs.toArray();
     return buildHeatmap(logs, Date.now());
@@ -31,6 +35,18 @@ export default function StatsScreen() {
     <div className="screen">
       <h1>Stats</h1>
       {heatmap && <Heatmap data={heatmap} />}
+      <Link to="/stats/body-weight">
+        <div className="card row spread">
+          <strong>Body weight</strong>
+          <span className="small">
+            {weights && weights.length > 0
+              ? `${round1(weights[weights.length - 1].weightLbs)} lb${
+                  trend ? ` · ${describeTrend(trend)}` : ''
+                }`
+              : 'not logged yet'}
+          </span>
+        </div>
+      </Link>
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search exercises" />
       <div style={{ marginTop: 12 }}>
         {filtered?.map(({ exercise, lastAt }) => (

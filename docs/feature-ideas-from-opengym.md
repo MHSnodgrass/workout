@@ -7,9 +7,9 @@ mechanics, not code (AGPL — clean-room implementations only).
 
 Reviewed 2026-08-24. Ordered roughly by value-for-effort within each tier.
 
-**Status as of 2026-08-24** — shipped: #1, #3, #4, #5, #7, #9, and #2 in part
-(accents only). Remaining: #2's light mode, #6, #8, #10–#14. Each item below
-is marked, with a note on what actually landed where it differs from the plan.
+**Status as of 2026-08-24** — shipped: #1, #2, #3, #4, #5, #6, #7, #9, #13.
+Remaining: #8, #10, #11, #12, #14, and the new #15. Each item below is marked,
+with a note on what actually landed where it differs from the plan.
 
 ---
 
@@ -28,13 +28,14 @@ between sets; release on finish. openGym makes this toggleable in Settings.
   the re-acquire-on-`visibilitychange` logic is testable in node), hook in
   `useWakeLock.ts`. Settings key `keepAwake`, default on.
 
-### 2. Theme accents + light mode — ◑ accents shipped, light mode skipped
+### 2. Theme accents — ✅ shipped
 openGym ships light/dark themes with 8 accent colors, saved per profile.
-- **How:** Our CSS is already token-based (`--accent`, `--bg`, …). Add a
-  light palette and 4–6 accent choices in Settings; persist in `settings`.
-- **Why:** Cheap personality. The dark theme is currently the only option.
-- **Landed, partly.** Six accents in `src/lib/theme.ts`, key `accent`.
-  **Light mode was deliberately skipped** — still open if wanted.
+- **How:** Our CSS is already token-based (`--accent`, `--bg`, …). Add 4–6
+  accent choices in Settings; persist in `settings`.
+- **Why:** Cheap personality.
+- **Landed.** Six accents in `src/lib/theme.ts`, key `accent`.
+  **Light mode is not happening** — dropped from scope 2026-08-24, the app is
+  dark-only by choice. Don't re-propose it.
   Each accent ships its own `--accent-ink`: white on the lighter accents
   fails contrast, so the button-label color travels with the accent, and
   the contrast floors are asserted in `theme.test.ts`. No red accent —
@@ -94,7 +95,7 @@ already have rep ranges (`targetRepsMin`/`targetRepsMax`):
   Increment is per-exercise (`Exercise.incrementLbs`) over a global
   `defaultIncrementLbs`. **Stall detection / deload was not built.**
 
-### 6. Optional RIR/RPE effort column — ☐ not started
+### 6. Optional RIR/RPE effort column — ✅ shipped
 Third per-set field: reps-in-reserve (or RPE). openGym keeps it independent
 of progression math.
 - **How:** Optional `rir` on `SetLog` (Dexie is schemaless-ish — additive
@@ -102,6 +103,13 @@ of progression math.
   input per set row, shown in history. Off by default via Settings toggle.
 - **Why:** Cheap context for judging whether a "PR" was grindy or easy.
   Pairs well with #5's stall logic if we ever add it.
+- **Landed** as RIR only, not RPE — same information, and "2 left in the
+  tank" needs no mental mapping. `src/lib/effort.ts` parses and labels it;
+  0–10 accepted, whole numbers only. Setting key `trackRir`, default off.
+  `formatSet` appends `· 2 RIR`, so it shows up in the last-time line,
+  history and PR list at once — the separator is a middot rather than the
+  conventional `@` because a timed set already reads `60s @ 50 lb`.
+  **`suggestNext` deliberately does not read it**, per openGym's split.
 
 ---
 
@@ -168,13 +176,24 @@ openGym assigns routines to weekdays; Home would highlight today's plan.
   routine. Skip openGym's reschedule machinery — our "last done X days ago"
   already covers the flexible-schedule case.
 
-### 13. Body-weight tracking with goal line — ☐ not started
+### 13. Body-weight tracking with goal line — ✅ shipped
 Weight log + chart with goal-line coloring; openGym even prompts at session
 start.
 - **How:** New `bodyWeights` table, small entry field on Home or Settings,
   Recharts line with a `ReferenceLine` for the goal. Include in backup.
-- **Why/why not:** Was cut from v1 as scope creep; it's cheap and the chart
-  infra exists. Add when wanted.
+- **Landed** as `bodyWeights` (Dexie `version(2)`), a one-line entry card on
+  Home, and a lazy `/stats/body-weight` route with the chart. **One reading
+  per local day** — logging again replaces it, so the button is idempotent
+  and a second weigh-in can't spike the chart.
+  A raw daily line is unreadable (water swings a couple of pounds), so the
+  chart draws a muted raw line under an accent **7-day moving average**, and
+  the trend compares smoothed endpoints. The trend reports the span it
+  actually covered, not the 30 days it was asked for. Goal weight lives on
+  that screen rather than in Settings, with `ifOverflow="extendDomain"` so
+  it stays on screen; it carries no chart label, which collided with the
+  date axis. Pure logic in `src/lib/bodyWeight.ts`; `localMidnight`/`addDays`
+  moved out of `heatmap.ts` into `src/lib/dates.ts`.
+- **Not done:** openGym's prompt-at-session-start. Home is enough.
 
 ### 14. Rest-timer push notification when backgrounded — ☐ not started
 openGym (having a server) pushes rest-alerts even when the app is closed.
@@ -183,6 +202,30 @@ openGym (having a server) pushes rest-alerts even when the app is closed.
   scheduled notifications (Notification Triggers API) still aren't broadly
   available. **#1 (wake lock) mostly obsoletes this.** Revisit only if wake
   lock proves insufficient.
+
+---
+
+## Not from openGym
+
+### 15. Visual identity pass — ☐ not started
+Added 2026-08-24. The app works but it reads as generic dark-Bootstrap —
+it looks like a starter template, not like a thing someone made.
+- **What's actually wrong**, concretely:
+  - `system-ui` for everything. No display face, no character.
+  - One card — `--surface`, 1px `--border`, 12px radius — repeated on every
+    screen, so every screen has the same texture and nothing has emphasis.
+  - No type scale worth the name: 22px `h1`, then 15px body and 13px
+    `.small`. Nothing between, nothing above.
+  - Every screen is the same flat vertical stack of full-width cards. No
+    density contrast, no grouping, no rhythm.
+  - **The numbers are set in the same weight as their labels.** Weights,
+    reps and PRs are the entire point of the app and they're typographically
+    invisible.
+- **Where to start:** a real type scale and a tabular-figure treatment for
+  logged numbers would fix most of it before touching layout. The accent
+  system and `--accent-ink` already work — build on those, don't restart.
+- **Constraint:** this is a phone-first PWA used mid-set, in a gym, one
+  handed. Legible and fast to hit beats clever.
 
 ---
 
@@ -202,23 +245,26 @@ openGym (having a server) pushes rest-alerts even when the app is closed.
 
 ## What's left
 
-Tiers 1-3 are done apart from the two below; everything remaining is a
-deliberate decision rather than a queue.
+Tiers 1–3 are done. Everything remaining is a deliberate decision rather
+than a queue.
 
-1. **#6 RIR/RPE column** — smallest remaining item. Additive `rir` on
-   `SetLog`; bump the backup `schemaVersion`.
+1. **#15 visual identity pass** — the only item that isn't a feature, and the
+   one the app most visibly needs.
 2. **#8 muscle-group coverage** — needs `muscleGroups[]` on `Exercise` and
    the tagging UI to go with it. Start with per-group set counts.
-3. **#13 body-weight tracking** — cheap now: Recharts is already lazy-loaded,
-   so a second chart costs nothing on the logging path.
-4. **#2's light mode** — the accent half shipped; the light palette didn't.
-5. **#12 weekday schedule** — small, makes Home answer "what's today".
-6. **#10 seeded library**, **#11 supersets**, **#14 push notifications** —
+3. **#12 weekday schedule** — small, makes Home answer "what's today".
+4. **#10 seeded library**, **#11 supersets**, **#14 push notifications** —
    still the deliberate-decision pile. #14 remains mostly obsoleted by #1.
+
+Also unbuilt, noted where they belong: #5's stall detection / deload.
 
 ### Conventions these were built to
 - Pure logic lives in `src/lib/` with vitest tests; TDD.
 - Components are **not** unit-tested — the repo has no jsdom or
   testing-library. UI is verified by driving the real app instead.
 - `vite.config.ts` sets `environment: 'node'`; keep new logic node-testable.
-- Recharts is lazy-loaded via the stats routes. Keep it off the logging path.
+- Recharts is lazy-loaded via the stats routes. Keep it off the logging path
+  — verified against the production build, not just the import graph.
+- Backup `SCHEMA_VERSION` is 2. Tables added after v1 are validated as
+  *optional*, so older backup files still restore; `TABLE_KEYS` lists only
+  the six that shipped in v1. Keep it that way when adding a table.

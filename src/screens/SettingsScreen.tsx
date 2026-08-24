@@ -12,6 +12,7 @@ export default function SettingsScreen() {
   const globalRest = useLiveQuery(() => getSetting<number>('globalRestSeconds', 90), []);
   const lastExportAt = useLiveQuery(() => getSetting<number | null>('lastExportAt', null), []);
   const keepAwake = useLiveQuery(() => getSetting<boolean>('keepAwake', true), []);
+  const trackRir = useLiveQuery(() => getSetting<boolean>('trackRir', false), []);
   const defaultIncrement = useLiveQuery(() => getSetting<number>('defaultIncrementLbs', 5), []);
   const accentId = useLiveQuery(() => getSetting<string>('accent', DEFAULT_ACCENT_ID), []);
   const [pendingImport, setPendingImport] = useState<BackupFile | null>(null);
@@ -118,6 +119,18 @@ export default function SettingsScreen() {
         </label>
         <p className="small">
           Stops the phone locking between sets. Ignored on browsers without the Wake Lock API.
+        </p>
+        <label className="row" style={{ marginTop: 12 }}>
+          <input
+            type="checkbox"
+            checked={trackRir ?? false}
+            onChange={(e) => void setSetting('trackRir', e.target.checked)}
+          />
+          <span>Track effort (RIR)</span>
+        </label>
+        <p className="small">
+          Adds a reps-in-reserve field to each set — how many you had left. Never changes the
+          weight the app suggests.
         </p>
       </div>
       <div className="card">

@@ -21,6 +21,7 @@ import {
   type SessionPoint,
 } from '../lib/metrics';
 import { getSetting } from '../db/settings';
+import { MAX_RIR, parseRir } from '../lib/effort';
 import { DEFAULT_ACCENT_ID, resolveAccent } from '../lib/theme';
 import { deleteSession, deleteSet, updateSet } from '../db/mutations';
 import { formatDate, formatSet, formatShortDate, metricLabel, round1 } from '../lib/format';
@@ -126,6 +127,7 @@ function Records({ history, type }: { history: SessionSets[]; type: ExerciseType
 
 function HistoryList({ history, type }: { history: SessionSets[]; type: ExerciseType }) {
   const toast = useToast();
+  const trackRir = useLiveQuery(() => getSetting<boolean>('trackRir', false), []);
   const newestFirst = [...history].reverse();
   return (
     <>
@@ -148,7 +150,7 @@ function HistoryList({ history, type }: { history: SessionSets[]; type: Exercise
           </div>
           {session.note && <div className="small">“{session.note}”</div>}
           {sets.map((s) => (
-            <SetHistoryRow key={s.id} set={s} type={type} />
+            <SetHistoryRow key={s.id} set={s} type={type} trackRir={trackRir === true} />
           ))}
         </div>
       ))}
@@ -156,13 +158,22 @@ function HistoryList({ history, type }: { history: SessionSets[]; type: Exercise
   );
 }
 
-function SetHistoryRow({ set, type }: { set: SetLog; type: ExerciseType }) {
+function SetHistoryRow({
+  set,
+  type,
+  trackRir,
+}: {
+  set: SetLog;
+  type: ExerciseType;
+  trackRir: boolean;
+}) {
   const toast = useToast();
   const [editing, setEditing] = useState(false);
   const [weight, setWeight] = useState(String(set.weightLbs ?? ''));
   const [amount, setAmount] = useState(
     String(type === 'timed' ? set.durationSeconds ?? '' : set.reps ?? ''),
   );
+  const [rir, setRir] = useState(String(set.rir ?? ''));
 
   async function save() {
     const w = weight.trim() === '' ? undefined : Number(weight);
@@ -171,11 +182,17 @@ function SetHistoryRow({ set, type }: { set: SetLog; type: ExerciseType }) {
       toast(type === 'timed' ? 'Enter seconds' : 'Enter reps');
       return;
     }
+    const effort = parseRir(rir);
+    if (!effort.ok) {
+      toast(effort.error);
+      return;
+    }
     try {
       await updateSet(set.id!, {
         weightLbs: w,
         reps: type === 'timed' ? undefined : a,
         durationSeconds: type === 'timed' ? a : undefined,
+        rir: effort.value,
       });
       setEditing(false);
     } catch {
@@ -212,6 +229,18 @@ function SetHistoryRow({ set, type }: { set: SetLog; type: ExerciseType }) {
         onChange={(e) => setAmount(e.target.value)}
         placeholder={type === 'timed' ? 'sec' : 'reps'}
       />
+      {trackRir && (
+        <input
+          className="rir-input"
+          type="number"
+          min={0}
+          max={MAX_RIR}
+          value={rir}
+          onChange={(e) => setRir(e.target.value)}
+          placeholder="RIR"
+          aria-label="Reps in reserve"
+        />
+      )}
       <button className="primary small" onClick={save}>Save</button>
     </div>
   );

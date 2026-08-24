@@ -16,6 +16,7 @@ import {
   round1,
   targetLabel,
 } from '../lib/format';
+import { MAX_RIR, parseRir } from '../lib/effort';
 import { suggestNext } from '../lib/progression';
 import { useWakeLock } from '../lib/useWakeLock';
 import ConfirmButton from '../components/ConfirmButton';
@@ -106,6 +107,7 @@ function ActiveWorkout({ session }: { session: Session }) {
   const keepAwake = useLiveQuery(() => getSetting<boolean>('keepAwake', true), []);
   useWakeLock(keepAwake === true);
   const defaultIncrement = useLiveQuery(() => getSetting<number>('defaultIncrementLbs', 5), []);
+  const trackRir = useLiveQuery(() => getSetting<boolean>('trackRir', false), []);
 
   function onSetLogged(restSeconds: number) {
     if (autoRest) setRestEndsAt(Date.now() + restSeconds * 1000);
@@ -139,6 +141,7 @@ function ActiveWorkout({ session }: { session: Session }) {
           re={re}
           exercise={exercise}
           defaultIncrementLbs={defaultIncrement ?? 5}
+          trackRir={trackRir === true}
           onSetLogged={onSetLogged}
         />
       ))}
@@ -157,6 +160,7 @@ function ActiveWorkout({ session }: { session: Session }) {
 interface PendingRow {
   weight: string;
   amount: string; // reps, or seconds for timed exercises
+  rir: string;
   // Timed exercises only: wall-clock start of the in-set work timer. Stored as
   // a timestamp rather than an accumulated count so backgrounding the app (or
   // any missed tick) can't lose time.
@@ -168,12 +172,14 @@ function ExerciseCard({
   re,
   exercise,
   defaultIncrementLbs,
+  trackRir,
   onSetLogged,
 }: {
   session: Session;
   re: RoutineExercise;
   exercise: Exercise;
   defaultIncrementLbs: number;
+  trackRir: boolean;
   onSetLogged: (restSeconds: number) => void;
 }) {
   const toast = useToast();
@@ -221,6 +227,7 @@ function ExerciseCard({
         suggestion?.weightLbs ?? lastTime?.sets[loggedSets.length + i]?.weightLbs ?? '',
       ),
       amount: '',
+      rir: '',
     }));
 
   function updateRow(i: number, patch: Partial<PendingRow>) {
@@ -261,6 +268,11 @@ function ExerciseCard({
       toast('Enter a weight');
       return;
     }
+    const effort = parseRir(row.rir);
+    if (!effort.ok) {
+      toast(effort.error);
+      return;
+    }
     try {
       await logSet({
         sessionId: session.id!,
@@ -269,6 +281,7 @@ function ExerciseCard({
         weightLbs: weight,
         reps: exercise.type === 'timed' ? undefined : amount,
         durationSeconds: exercise.type === 'timed' ? amount : undefined,
+        rir: effort.value,
       });
       setPending(rows.filter((_, j) => j !== i));
       onSetLogged(exercise.defaultRestSeconds);
@@ -329,6 +342,19 @@ function ExerciseCard({
             onChange={(e) => updateRow(i, { amount: e.target.value })}
             readOnly={row.runningSince !== undefined}
           />
+          {trackRir && (
+            <input
+              className="rir-input"
+              type="number"
+              inputMode="numeric"
+              min={0}
+              max={MAX_RIR}
+              placeholder="RIR"
+              aria-label="Reps in reserve"
+              value={row.rir}
+              onChange={(e) => updateRow(i, { rir: e.target.value })}
+            />
+          )}
           {exercise.type === 'timed' && (
             <button
               className={`small timer-btn${row.runningSince !== undefined ? ' running' : ''}`}
@@ -357,7 +383,7 @@ function ExerciseCard({
       <button
         className="small"
         style={{ marginTop: 8 }}
-        onClick={() => setPending([...rows, { weight: '', amount: '' }])}
+        onClick={() => setPending([...rows, { weight: '', amount: '', rir: '' }])}
       >
         + Add set
       </button>

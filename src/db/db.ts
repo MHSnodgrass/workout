@@ -45,12 +45,21 @@ export interface SetLog {
   weightLbs?: number;
   reps?: number;
   durationSeconds?: number;
+  /** Reps left in reserve. Optional and off by default; see lib/effort.ts. */
+  rir?: number;
   loggedAt: number;
 }
 
 export interface Setting {
   key: string;
   value: unknown;
+}
+
+export interface BodyWeight {
+  id?: number;
+  /** When it was weighed. At most one reading per local day; see db/bodyWeights.ts. */
+  at: number;
+  weightLbs: number;
 }
 
 export class WorkoutDB extends Dexie {
@@ -60,6 +69,7 @@ export class WorkoutDB extends Dexie {
   sessions!: Table<Session, number>;
   setLogs!: Table<SetLog, number>;
   settings!: Table<Setting, string>;
+  bodyWeights!: Table<BodyWeight, number>;
 
   constructor() {
     super('workout-db');
@@ -73,6 +83,10 @@ export class WorkoutDB extends Dexie {
       setLogs: '++id, sessionId, exerciseId',
       settings: 'key',
     });
+    // Dexie carries the untouched stores forward, so only the new one is
+    // listed. SetLog.rir arrived in the same release and needs no migration —
+    // it is an optional, unindexed field.
+    this.version(2).stores({ bodyWeights: '++id, at' });
   }
 }
 

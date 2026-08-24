@@ -1,4 +1,5 @@
 import type { ExerciseType, RoutineExercise, SetLog } from '../db/db';
+import { formatRir } from './effort';
 import type { MetricKey } from './metrics';
 
 export function formatDate(ms: number): string {
@@ -52,6 +53,11 @@ export function metricLabel(metric: MetricKey): string {
 }
 
 export function formatSet(set: SetLog, type: ExerciseType): string {
+  const effort = formatRir(set.rir);
+  return effort === '' ? setBody(set, type) : `${setBody(set, type)} · ${effort}`;
+}
+
+function setBody(set: SetLog, type: ExerciseType): string {
   if (type === 'timed') {
     const base = `${set.durationSeconds ?? 0}s`;
     return set.weightLbs !== undefined ? `${base} @ ${set.weightLbs} lb` : base;

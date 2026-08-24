@@ -36,7 +36,7 @@ export async function logSet(input: Omit<SetLog, 'id' | 'loggedAt'>): Promise<nu
 
 export async function updateSet(
   setLogId: number,
-  changes: Partial<Pick<SetLog, 'weightLbs' | 'reps' | 'durationSeconds'>>,
+  changes: Partial<Pick<SetLog, 'weightLbs' | 'reps' | 'durationSeconds' | 'rir'>>,
 ): Promise<void> {
   await db.setLogs.update(setLogId, changes);
 }

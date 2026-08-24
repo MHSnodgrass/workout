@@ -6,6 +6,8 @@
  * the clock so the grid is deterministic and testable.
  */
 
+import { addDays, localMidnight } from './dates';
+
 export const WEEKS_SHOWN = 53;
 const DAYS_SHOWN = WEEKS_SHOWN * 7;
 
@@ -27,17 +29,6 @@ export interface Heatmap {
 interface LoggedSet {
   loggedAt: number;
   sessionId: number;
-}
-
-function localMidnight(ms: number): number {
-  const d = new Date(ms);
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-}
-
-function addDays(ms: number, days: number): number {
-  const d = new Date(ms);
-  // Via calendar parts, so a DST shift can't slide the day by an hour.
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + days).getTime();
 }
 
 /**
