@@ -7,9 +7,9 @@ mechanics, not code (AGPL — clean-room implementations only).
 
 Reviewed 2026-08-24. Ordered roughly by value-for-effort within each tier.
 
-**Status as of 2026-08-24** — shipped: #1, #2, #3, #4, #5, #6, #7, #9, #13.
-Remaining: #8, #10, #11, #12, #14, and the new #15. Each item below is marked,
-with a note on what actually landed where it differs from the plan.
+**Status as of 2026-08-24** — shipped: #1–#9, #12, #13. Remaining: #10, #11,
+#14 (the deliberate-decision pile) and #15 (visual identity). Each item below
+is marked, with a note on what actually landed where it differs from the plan.
 
 ---
 
@@ -68,7 +68,7 @@ logs the actual time held — separate from the rest timer.
 
 ## Tier 2 — The big one: progression intelligence
 
-### 5. Double-progression suggestions — ✅ shipped (stall/deload not done)
+### 5. Double-progression suggestions — ✅ shipped, stall detection included
 openGym's core loop: progression schemes tell you what to attempt today.
 **Double progression** fits our data model perfectly since routine exercises
 already have rep ranges (`targetRepsMin`/`targetRepsMax`):
@@ -86,14 +86,23 @@ already have rep ranges (`targetRepsMin`/`targetRepsMax`):
 - **Why:** This automates the exact "what should I do for progressive
   overload" decision the app was built for. Today we show history; this
   gives the answer.
-- **Later options (only if wanted):** stall detection after N failed
-  attempts → suggest a deload (openGym: missed reps never advance load;
-  stalls auto-deload ~10%).
 - **Landed** in `src/lib/progression.ts`. The working weight is the
   *lightest* of the target sets — the load actually completed for every
   set — so a ramped session progresses from its base, not its top single.
   Increment is per-exercise (`Exercise.incrementLbs`) over a global
-  `defaultIncrementLbs`. **Stall detection / deload was not built.**
+  `defaultIncrementLbs`.
+- **Stall detection landed too** (2026-08-24). `suggestNext` now takes the
+  whole history rather than just last time, so one function owns the
+  decision instead of the screen arbitrating between "hold" and "deload".
+  It counts back consecutive sessions at the *same* working weight that
+  missed the range top; at the threshold (setting `stallSessions`, default
+  3) it suggests `working × 0.9` snapped to the exercise's increment, and
+  holds instead if that can't land strictly lower. Changing the load or
+  hitting the range ends the streak, so working back up can't re-trigger.
+  The hint renders in `--pr` gold rather than the accent — a retreat should
+  not look like an advance.
+- **Weighted only.** There's nothing to take off a bodyweight exercise, and
+  "drop a set" is a different decision than "drop the load" — not invented.
 
 ### 6. Optional RIR/RPE effort column — ✅ shipped
 Third per-set field: reps-in-reserve (or RPE). openGym keeps it independent
@@ -127,7 +136,7 @@ Year grid on the Stats (or Home) screen shaded by training volume/time per day.
   lowest band. Days bucket by *local* date. Month labels were added because
   the per-day tooltips never appear on a phone.
 
-### 8. Muscle-group coverage map — ☐ not started
+### 8. Muscle-group coverage map — ✅ shipped (list, not figures)
 openGym shows front/back body figures shaded by weekly/monthly work, plus a
 preview while building routines ("this plan misses hamstrings").
 - **How:** Requires tagging each exercise with muscle groups — add optional
@@ -137,6 +146,18 @@ preview while building routines ("this plan misses hamstrings").
 - **Why:** Answers "is Workout A/B/C balanced?" — genuinely useful when
   editing routines. The SVG figure is polish; the per-group set counts are
   the value.
+- **Landed** as `Exercise.muscleGroups[]` from a **fixed vocabulary of ten**
+  in `src/lib/muscles.ts` — free text fragments into "chest"/"Chest"/"pecs"
+  within a week and then the counts mean nothing. Tagging chips live on the
+  exercise library rows in Routines, where the other exercise properties
+  already are. Stats shows a 7-day bar list; a set counts once toward *each*
+  of its groups, so the totals deliberately exceed the sets logged.
+  Untrained groups stay listed at zero — the gaps are the point — and sets
+  from untagged exercises are counted and reported separately rather than
+  silently dropped, with a link to go fix it.
+- **Not done:** the body-figure SVGs, and openGym's "this plan misses
+  hamstrings" preview while editing a routine. The second one is the more
+  useful of the two if this gets revisited.
 
 ### 9. Named best-set on the 1RM stat — ✅ shipped
 openGym's est. 1RM display names which set produced it ("185×5 on Aug 12").
@@ -170,11 +191,19 @@ Pair two exercises, alternate their set rows, one rest after the pair.
   interleaves cards. Was deliberately cut from v1 — revisit only if the
   actual training style changes.
 
-### 12. Weekly schedule ("today is Workout B day") — ☐ not started
+### 12. Weekly schedule ("today is Workout B day") — ✅ shipped
 openGym assigns routines to weekdays; Home would highlight today's plan.
 - **How:** Optional `weekday` on `Routine`; Home sorts/badges today's
   routine. Skip openGym's reschedule machinery — our "last done X days ago"
   already covers the flexible-schedule case.
+- **Landed** as `Routine.weekdays[]` — **plural**, because a Push/Pull/Legs
+  split runs Push on Mon *and* Thu and a single day would force duplicate
+  routines. Seven toggle chips in the routine editor; Home badges today's
+  routines, outlines them in the accent and floats them to the top, while
+  everything else keeps its existing order. Unscheduled routines show
+  nothing, and every routine stays startable on any day — the schedule is a
+  hint, not a gate. `src/lib/schedule.ts` handles the labels ("Mon & Thu",
+  "Every day").
 
 ### 13. Body-weight tracking with goal line — ✅ shipped
 Weight log + chart with goal-line coloring; openGym even prompts at session
@@ -245,18 +274,16 @@ it looks like a starter template, not like a thing someone made.
 
 ## What's left
 
-Tiers 1–3 are done. Everything remaining is a deliberate decision rather
-than a queue.
+Every feature worth stealing has been stolen. What's left:
 
-1. **#15 visual identity pass** — the only item that isn't a feature, and the
-   one the app most visibly needs.
-2. **#8 muscle-group coverage** — needs `muscleGroups[]` on `Exercise` and
-   the tagging UI to go with it. Start with per-group set counts.
-3. **#12 weekday schedule** — small, makes Home answer "what's today".
-4. **#10 seeded library**, **#11 supersets**, **#14 push notifications** —
-   still the deliberate-decision pile. #14 remains mostly obsoleted by #1.
+1. **#15 visual identity pass** — the only remaining item that isn't a
+   feature, and the one the app most visibly needs.
+2. **#10 seeded library**, **#11 supersets**, **#14 push notifications** —
+   the deliberate-decision pile, unchanged. #14 stays mostly obsoleted by #1.
 
-Also unbuilt, noted where they belong: #5's stall detection / deload.
+Smaller unbuilt pieces, noted where they belong: #8's routine-balance
+preview and body figures, #13's prompt-at-session-start, and deloads for
+bodyweight work.
 
 ### Conventions these were built to
 - Pure logic lives in `src/lib/` with vitest tests; TDD.
@@ -268,3 +295,7 @@ Also unbuilt, noted where they belong: #5's stall detection / deload.
 - Backup `SCHEMA_VERSION` is 2. Tables added after v1 are validated as
   *optional*, so older backup files still restore; `TABLE_KEYS` lists only
   the six that shipped in v1. Keep it that way when adding a table.
+- **Bump `SCHEMA_VERSION` for a new table, not for a new optional field.**
+  `weekdays` and `muscleGroups` were added without a bump: old builds store
+  and ignore unknown fields, so nothing is lost either direction, and every
+  bump makes a stale cached build refuse a file it could actually read.

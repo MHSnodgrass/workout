@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type Exercise } from '../db/db';
 import { createRoutine, deleteExercise, deleteRoutine, updateExercise } from '../db/mutations';
+import { MUSCLE_GROUPS } from '../lib/muscles';
 import ConfirmButton from '../components/ConfirmButton';
 import { useToast } from '../components/Toast';
 
@@ -125,6 +126,38 @@ function ExerciseLibRow({ exercise }: { exercise: Exercise }) {
           </>
         )}
       </div>
+      <MuscleTags exercise={exercise} />
+    </div>
+  );
+}
+
+function MuscleTags({ exercise }: { exercise: Exercise }) {
+  const toast = useToast();
+  const selected = exercise.muscleGroups ?? [];
+
+  async function toggle(group: string) {
+    const next = selected.includes(group)
+      ? selected.filter((g) => g !== group)
+      : [...selected, group];
+    try {
+      await updateExercise(exercise.id!, { muscleGroups: next });
+    } catch {
+      toast("Couldn't save muscle groups");
+    }
+  }
+
+  return (
+    <div className="row tag-row" style={{ marginTop: 8 }}>
+      {MUSCLE_GROUPS.map((g) => (
+        <button
+          key={g}
+          className={`tag${selected.includes(g) ? ' selected' : ''}`}
+          aria-pressed={selected.includes(g)}
+          onClick={() => toggle(g)}
+        >
+          {g}
+        </button>
+      ))}
     </div>
   );
 }

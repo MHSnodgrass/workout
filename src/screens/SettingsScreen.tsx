@@ -4,6 +4,7 @@ import { Check } from 'lucide-react';
 import { buildBackup, importBackup, validateBackup, type BackupFile } from '../db/backup';
 import { getSetting, setSetting } from '../db/settings';
 import { formatDate } from '../lib/format';
+import { DEFAULT_STALL_SESSIONS } from '../lib/progression';
 import { ACCENTS, DEFAULT_ACCENT_ID } from '../lib/theme';
 import { useToast } from '../components/Toast';
 
@@ -15,6 +16,10 @@ export default function SettingsScreen() {
   const trackRir = useLiveQuery(() => getSetting<boolean>('trackRir', false), []);
   const defaultIncrement = useLiveQuery(() => getSetting<number>('defaultIncrementLbs', 5), []);
   const accentId = useLiveQuery(() => getSetting<string>('accent', DEFAULT_ACCENT_ID), []);
+  const stallSessions = useLiveQuery(
+    () => getSetting<number>('stallSessions', DEFAULT_STALL_SESSIONS),
+    [],
+  );
   const [pendingImport, setPendingImport] = useState<BackupFile | null>(null);
 
   async function doExport() {
@@ -162,6 +167,21 @@ export default function SettingsScreen() {
           <span className="small">lb added when you top out a rep range</span>
         </div>
         <p className="small">Override per exercise in the Routines tab.</p>
+        <div className="row" style={{ marginTop: 12 }}>
+          <input
+            type="number"
+            min={2}
+            value={stallSessions ?? DEFAULT_STALL_SESSIONS}
+            onChange={(e) => {
+              const n = Number(e.target.value);
+              if (Number.isInteger(n) && n >= 2) void setSetting('stallSessions', n);
+            }}
+          />
+          <span className="small">sessions stuck before suggesting a deload</span>
+        </div>
+        <p className="small">
+          Drops about 10%, rounded to the exercise's increment. Weighted exercises only.
+        </p>
       </div>
     </div>
   );

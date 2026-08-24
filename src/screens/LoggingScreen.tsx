@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Check, Timer, Trophy, X } from 'lucide-react';
 import { db, type Exercise, type RoutineExercise, type Session } from '../db/db';
-import { detectSessionPRs, getLastTime } from '../db/queries';
+import { detectSessionPRs, getExerciseHistory } from '../db/queries';
 import { deleteSet, finishSession, logSet, updateSessionNote } from '../db/mutations';
 import { getSetting } from '../db/settings';
 import {
@@ -17,7 +17,7 @@ import {
   targetLabel,
 } from '../lib/format';
 import { MAX_RIR, parseRir } from '../lib/effort';
-import { suggestNext } from '../lib/progression';
+import { DEFAULT_STALL_SESSIONS, suggestNext } from '../lib/progression';
 import { useWakeLock } from '../lib/useWakeLock';
 import ConfirmButton from '../components/ConfirmButton';
 import RestTimerBar from '../components/RestTimerBar';
@@ -108,6 +108,10 @@ function ActiveWorkout({ session }: { session: Session }) {
   useWakeLock(keepAwake === true);
   const defaultIncrement = useLiveQuery(() => getSetting<number>('defaultIncrementLbs', 5), []);
   const trackRir = useLiveQuery(() => getSetting<boolean>('trackRir', false), []);
+  const stallSessions = useLiveQuery(
+    () => getSetting<number>('stallSessions', DEFAULT_STALL_SESSIONS),
+    [],
+  );
 
   function onSetLogged(restSeconds: number) {
     if (autoRest) setRestEndsAt(Date.now() + restSeconds * 1000);
@@ -141,6 +145,7 @@ function ActiveWorkout({ session }: { session: Session }) {
           re={re}
           exercise={exercise}
           defaultIncrementLbs={defaultIncrement ?? 5}
+          stallSessions={stallSessions ?? DEFAULT_STALL_SESSIONS}
           trackRir={trackRir === true}
           onSetLogged={onSetLogged}
         />
@@ -172,6 +177,7 @@ function ExerciseCard({
   re,
   exercise,
   defaultIncrementLbs,
+  stallSessions,
   trackRir,
   onSetLogged,
 }: {
@@ -179,6 +185,7 @@ function ExerciseCard({
   re: RoutineExercise;
   exercise: Exercise;
   defaultIncrementLbs: number;
+  stallSessions: number;
   trackRir: boolean;
   onSetLogged: (restSeconds: number) => void;
 }) {
@@ -192,10 +199,10 @@ function ExerciseCard({
         .sortBy('setNumber'),
     [session.id, exercise.id],
   );
-  const lastTime = useLiveQuery(
-    () => getLastTime(exercise.id!, session.id),
-    [exercise.id, session.id],
-  );
+  // The whole history, not just last time: stall detection reads back through
+  // it. getExerciseHistory only returns finished sessions, so the one being
+  // logged right now is already excluded.
+  const history = useLiveQuery(() => getExerciseHistory(exercise.id!), [exercise.id]);
   const [pending, setPending] = useState<PendingRow[] | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
@@ -208,14 +215,16 @@ function ExerciseCard({
     return () => window.clearInterval(t);
   }, [timerRunning]);
 
-  if (logged === undefined || lastTime === undefined) return null;
+  if (logged === undefined || history === undefined) return null;
   const loggedSets = logged;
+  const lastTime = history.length > 0 ? history[history.length - 1] : null;
 
   const suggestion = suggestNext(
-    lastTime,
+    history,
     re,
     exercise,
     exercise.incrementLbs ?? defaultIncrementLbs,
+    stallSessions,
   );
 
   const rows: PendingRow[] =
@@ -303,7 +312,9 @@ function ExerciseCard({
             )}`
           : 'First time!'}
       </div>
-      {suggestion && <div className="suggestion">{suggestion.note}</div>}
+      {suggestion && (
+        <div className={`suggestion${suggestion.deload ? ' deload' : ''}`}>{suggestion.note}</div>
+      )}
       {loggedSets.map((s) => (
         <div className="set-row logged" key={s.id}>
           <span style={{ flex: 1 }}>

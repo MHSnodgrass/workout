@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ChevronDown, ChevronUp, Pencil } from 'lucide-react';
-import { db, type Exercise, type ExerciseType, type RoutineExercise } from '../db/db';
+import { db, type Exercise, type ExerciseType, type Routine, type RoutineExercise } from '../db/db';
 import {
   DuplicateExerciseNameError,
   addExerciseToRoutine,
@@ -10,10 +10,12 @@ import {
   moveRoutineExercise,
   removeRoutineExercise,
   renameRoutine,
+  setRoutineWeekdays,
   updateRoutineExercise,
 } from '../db/mutations';
 import { getSetting } from '../db/settings';
 import { targetLabel } from '../lib/format';
+import { WEEKDAYS, scheduleLabel } from '../lib/schedule';
 import ConfirmButton from '../components/ConfirmButton';
 import { useToast } from '../components/Toast';
 
@@ -51,6 +53,7 @@ export default function RoutineEditorScreen() {
           setName(null);
         }}
       />
+      <WeekdayPicker routine={routine} />
       {items.map(({ re, exercise }, i) => (
         <RoutineExerciseRow
           key={re.id}
@@ -69,6 +72,45 @@ export default function RoutineEditorScreen() {
       ) : (
         <button className="big" onClick={() => setShowPicker(true)}>+ Add exercise</button>
       )}
+    </div>
+  );
+}
+
+function WeekdayPicker({ routine }: { routine: Routine }) {
+  const toast = useToast();
+  const selected = routine.weekdays ?? [];
+
+  async function toggle(index: number) {
+    const next = selected.includes(index)
+      ? selected.filter((d) => d !== index)
+      : [...selected, index];
+    try {
+      await setRoutineWeekdays(routine.id!, next);
+    } catch {
+      toast("Couldn't save schedule");
+    }
+  }
+
+  return (
+    <div className="card">
+      <div className="row spread">
+        <strong>Scheduled</strong>
+        <span className="small">{scheduleLabel(selected) || 'any day'}</span>
+      </div>
+      <div className="row" style={{ marginTop: 8 }}>
+        {WEEKDAYS.map((d) => (
+          <button
+            key={d.index}
+            className={`day-chip${selected.includes(d.index) ? ' selected' : ''}`}
+            aria-label={d.short}
+            aria-pressed={selected.includes(d.index)}
+            onClick={() => toggle(d.index)}
+          >
+            {d.initial}
+          </button>
+        ))}
+      </div>
+      <p className="small">Highlights this routine on Home. You can still run it any day.</p>
     </div>
   );
 }

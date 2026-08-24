@@ -40,7 +40,7 @@ const weighted = (sets: Array<[number, number]>) =>
 
 describe('suggestNext — no suggestion', () => {
   it('says nothing without history', () => {
-    expect(suggestNext(null, target(), exercise('weighted'), 5)).toBeNull();
+    expect(suggestNext([], target(), exercise('weighted'), 5)).toBeNull();
   });
 
   it('says nothing when fewer sets were logged than the target', () => {
@@ -48,7 +48,7 @@ describe('suggestNext — no suggestion', () => {
       [135, 12],
       [135, 12],
     ]);
-    expect(suggestNext(last, target({ targetSets: 3 }), exercise('weighted'), 5)).toBeNull();
+    expect(suggestNext([last], target({ targetSets: 3 }), exercise('weighted'), 5)).toBeNull();
   });
 
   it('says nothing when the routine has no rep range to progress against', () => {
@@ -58,7 +58,7 @@ describe('suggestNext — no suggestion', () => {
       [135, 12],
     ]);
     const noRange = target({ targetRepsMin: undefined, targetRepsMax: undefined });
-    expect(suggestNext(last, noRange, exercise('weighted'), 5)).toBeNull();
+    expect(suggestNext([last], noRange, exercise('weighted'), 5)).toBeNull();
   });
 
   it('says nothing when a weighted set was logged without a weight', () => {
@@ -67,7 +67,7 @@ describe('suggestNext — no suggestion', () => {
       { reps: 12 },
       { weightLbs: 135, reps: 12 },
     ]);
-    expect(suggestNext(last, target(), exercise('weighted'), 5)).toBeNull();
+    expect(suggestNext([last], target(), exercise('weighted'), 5)).toBeNull();
   });
 });
 
@@ -79,7 +79,7 @@ describe('suggestNext — weighted', () => {
       [135, 12],
     ]);
 
-    const s = suggestNext(last, target(), exercise('weighted'), 5);
+    const s = suggestNext([last], target(), exercise('weighted'), 5);
 
     expect(s).toEqual({
       weightLbs: 140,
@@ -95,7 +95,7 @@ describe('suggestNext — weighted', () => {
       [135, 10],
     ]);
 
-    const s = suggestNext(last, target(), exercise('weighted'), 5);
+    const s = suggestNext([last], target(), exercise('weighted'), 5);
 
     expect(s).toEqual({
       weightLbs: 135,
@@ -111,7 +111,7 @@ describe('suggestNext — weighted', () => {
       [45, 12],
     ]);
 
-    expect(suggestNext(last, target(), exercise('weighted'), 2.5)?.weightLbs).toBe(47.5);
+    expect(suggestNext([last], target(), exercise('weighted'), 2.5)?.weightLbs).toBe(47.5);
   });
 
   it('treats the lightest working set as the weight to beat, so a ramp stays conservative', () => {
@@ -121,7 +121,7 @@ describe('suggestNext — weighted', () => {
       [155, 12],
     ]);
 
-    expect(suggestNext(last, target(), exercise('weighted'), 5)?.weightLbs).toBe(140);
+    expect(suggestNext([last], target(), exercise('weighted'), 5)?.weightLbs).toBe(140);
   });
 
   it('ignores sets logged beyond the target count', () => {
@@ -132,7 +132,7 @@ describe('suggestNext — weighted', () => {
       [135, 6],
     ]);
 
-    expect(suggestNext(last, target({ targetSets: 3 }), exercise('weighted'), 5)?.weightLbs).toBe(
+    expect(suggestNext([last], target({ targetSets: 3 }), exercise('weighted'), 5)?.weightLbs).toBe(
       140,
     );
   });
@@ -144,7 +144,7 @@ describe('suggestNext — weighted', () => {
       [135, 12],
     ]);
 
-    expect(suggestNext(last, target(), exercise('weighted'), 5)?.weightLbs).toBe(140);
+    expect(suggestNext([last], target(), exercise('weighted'), 5)?.weightLbs).toBe(140);
   });
 });
 
@@ -153,7 +153,7 @@ describe('suggestNext — bodyweight', () => {
     const last = lastTime([{ reps: 20 }, { reps: 20 }, { reps: 20 }]);
     const re = target({ targetRepsMax: 20 });
 
-    const s = suggestNext(last, re, exercise('bodyweight'), 5);
+    const s = suggestNext([last], re, exercise('bodyweight'), 5);
 
     expect(s).toEqual({
       addSet: true,
@@ -166,7 +166,7 @@ describe('suggestNext — bodyweight', () => {
     const last = lastTime([{ reps: 20 }, { reps: 18 }, { reps: 15 }]);
     const re = target({ targetRepsMax: 20 });
 
-    const s = suggestNext(last, re, exercise('bodyweight'), 5);
+    const s = suggestNext([last], re, exercise('bodyweight'), 5);
 
     expect(s).toEqual({ reps: 20, note: 'Aim for 3×20' });
   });
@@ -178,7 +178,7 @@ describe('suggestNext — bodyweight', () => {
       { reps: 20, weightLbs: 25 },
     ]);
 
-    expect(suggestNext(last, target({ targetRepsMax: 20 }), exercise('bodyweight'), 5)?.weightLbs)
+    expect(suggestNext([last], target({ targetRepsMax: 20 }), exercise('bodyweight'), 5)?.weightLbs)
       .toBeUndefined();
   });
 });
@@ -197,7 +197,7 @@ describe('suggestNext — timed', () => {
       { durationSeconds: 60 },
     ]);
 
-    const s = suggestNext(last, timedTarget, exercise('timed'), 5);
+    const s = suggestNext([last], timedTarget, exercise('timed'), 5);
 
     expect(s).toEqual({ durationSeconds: 65, note: 'Try 65s — you held 60s last time' });
   });
@@ -209,7 +209,7 @@ describe('suggestNext — timed', () => {
       { durationSeconds: 60 },
     ]);
 
-    const s = suggestNext(last, timedTarget, exercise('timed'), 5);
+    const s = suggestNext([last], timedTarget, exercise('timed'), 5);
 
     expect(s).toEqual({ durationSeconds: 60, note: 'Aim for 3×60s' });
   });
@@ -218,6 +218,100 @@ describe('suggestNext — timed', () => {
     const last = lastTime([{ durationSeconds: 60 }, { durationSeconds: 60 }]);
     const noTarget = target({ targetSets: 2, targetDurationSeconds: undefined });
 
-    expect(suggestNext(last, noTarget, exercise('timed'), 5)).toBeNull();
+    expect(suggestNext([last], noTarget, exercise('timed'), 5)).toBeNull();
+  });
+});
+
+/** A finished weighted session with its own id, for building real history. */
+function session(id: number, sets: Array<[number, number]>): SessionSets {
+  return {
+    session: { id, routineId: 1, startedAt: id * 1_000, finishedAt: id * 1_000 + 500 },
+    sets: sets.map(([weightLbs, reps], i) => ({
+      id: id * 100 + i,
+      sessionId: id,
+      exerciseId: 1,
+      setNumber: i + 1,
+      weightLbs,
+      reps,
+      loggedAt: id * 1_000,
+    })),
+  };
+}
+
+const stalledAt = (id: number, w: number) =>
+  session(id, [
+    [w, 12],
+    [w, 12],
+    [w, 10],
+  ]);
+
+describe('suggestNext — stall detection', () => {
+  it('deloads after the threshold of stuck sessions at the same weight', () => {
+    const history = [stalledAt(1, 155), stalledAt(2, 155), stalledAt(3, 155)];
+
+    const s = suggestNext(history, target(), exercise('weighted'), 5, 3);
+
+    expect(s).toEqual({
+      weightLbs: 140,
+      reps: 8,
+      deload: true,
+      note: 'Deload to 140 lb — 3 sessions stuck at 155 lb',
+    });
+  });
+
+  it('holds while the stall is still short of the threshold', () => {
+    const history = [stalledAt(1, 155), stalledAt(2, 155)];
+
+    expect(suggestNext(history, target(), exercise('weighted'), 5, 3)?.note).toBe(
+      'Stay at 155 lb — aim for 3×12',
+    );
+  });
+
+  it('restarts the count when the working weight changed', () => {
+    const history = [stalledAt(1, 155), stalledAt(2, 145), stalledAt(3, 155)];
+
+    expect(suggestNext(history, target(), exercise('weighted'), 5, 3)?.deload).toBeUndefined();
+  });
+
+  it('restarts the count after a session that did hit the range', () => {
+    const hit = session(4, [
+      [155, 12],
+      [155, 12],
+      [155, 12],
+    ]);
+    const history = [stalledAt(1, 155), stalledAt(2, 155), hit, stalledAt(5, 155)];
+
+    expect(suggestNext(history, target(), exercise('weighted'), 5, 3)?.deload).toBeUndefined();
+  });
+
+  it('rounds the deload to the exercise increment', () => {
+    const history = [stalledAt(1, 100), stalledAt(2, 100), stalledAt(3, 100)];
+
+    // 90 lb exactly, and it lands on the 2.5 lb grid either way.
+    expect(suggestNext(history, target(), exercise('weighted'), 2.5, 3)?.weightLbs).toBe(90);
+  });
+
+  it('holds rather than deloading when there is no lower weight to give', () => {
+    const history = [stalledAt(1, 5), stalledAt(2, 5), stalledAt(3, 5)];
+
+    expect(suggestNext(history, target(), exercise('weighted'), 5, 3)?.deload).toBeUndefined();
+  });
+
+  it('never deloads bodyweight work — there is nothing to take off', () => {
+    const short = (id: number) => ({
+      session: { id, routineId: 1, startedAt: id * 1_000, finishedAt: id * 1_000 + 500 },
+      sets: [15, 15, 12].map((reps, i) => ({
+        id: id * 100 + i,
+        sessionId: id,
+        exerciseId: 1,
+        setNumber: i + 1,
+        reps,
+        loggedAt: id * 1_000,
+      })),
+    });
+    const history = [short(1), short(2), short(3)];
+
+    const s = suggestNext(history, target({ targetRepsMax: 20 }), exercise('bodyweight'), 5, 3);
+    expect(s).toEqual({ reps: 20, note: 'Aim for 3×20' });
   });
 });

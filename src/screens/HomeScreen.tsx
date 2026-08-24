@@ -7,6 +7,7 @@ import { getActiveSession, getLastFinishedSessionDate } from '../db/queries';
 import { startSession } from '../db/mutations';
 import { getSetting } from '../db/settings';
 import { formatDaysAgo } from '../lib/format';
+import { isScheduledToday, scheduleLabel } from '../lib/schedule';
 import BodyWeightInput from '../components/BodyWeightInput';
 import { useToast } from '../components/Toast';
 
@@ -28,6 +29,13 @@ export default function HomeScreen() {
     return last === null || Date.now() - last > 30 * 24 * 3600 * 1000;
   }, []);
   const [nudgeDismissed, setNudgeDismissed] = useState(false);
+
+  // Today's routines float up; everything else keeps the order it was created
+  // in, so the list doesn't reshuffle from day to day beyond the promotion.
+  const sorted = routines && [...routines].sort((a, b) => {
+    const rank = (r: typeof a) => (isScheduledToday(r.weekdays, Date.now()) ? 0 : 1);
+    return rank(a) - rank(b);
+  });
 
   async function start(routineId: number) {
     try {
@@ -62,18 +70,25 @@ export default function HomeScreen() {
           <button className="primary" onClick={() => navigate(`/log/${active.id}`)}>Resume</button>
         </div>
       )}
-      {routines?.map((r) => {
+      {sorted?.map((r) => {
         const last = lastDone?.get(r.id!);
+        const today = isScheduledToday(r.weekdays, Date.now());
         return (
           <button
             key={r.id}
-            className="card big"
+            className={`card big${today ? ' scheduled' : ''}`}
             style={{ textAlign: 'left' }}
             disabled={!!active}
             onClick={() => start(r.id!)}
           >
-            <strong>{r.name}</strong>
-            <div className="small">{last ? `Last done ${formatDaysAgo(last)}` : 'Never done'}</div>
+            <span className="row spread">
+              <strong>{r.name}</strong>
+              {today && <span className="badge">Today</span>}
+            </span>
+            <div className="small">
+              {last ? `Last done ${formatDaysAgo(last)}` : 'Never done'}
+              {!today && scheduleLabel(r.weekdays) !== '' && ` · ${scheduleLabel(r.weekdays)}`}
+            </div>
           </button>
         );
       })}

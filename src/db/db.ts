@@ -10,12 +10,16 @@ export interface Exercise {
   archived: 0 | 1;
   /** Weight step for progression suggestions; falls back to the global default. */
   incrementLbs?: number;
+  /** Values from MUSCLE_GROUPS in lib/muscles.ts. Untagged means uncounted. */
+  muscleGroups?: string[];
 }
 
 export interface Routine {
   id?: number;
   name: string;
   archived: 0 | 1;
+  /** Days this routine is meant for, 0 = Sunday. A hint; see lib/schedule.ts. */
+  weekdays?: number[];
 }
 
 export interface RoutineExercise {

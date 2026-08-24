@@ -67,7 +67,9 @@ export async function createExercise(
 
 export async function updateExercise(
   exerciseId: number,
-  changes: Partial<Pick<Exercise, 'name' | 'defaultRestSeconds' | 'incrementLbs'>>,
+  changes: Partial<
+    Pick<Exercise, 'name' | 'defaultRestSeconds' | 'incrementLbs' | 'muscleGroups'>
+  >,
 ): Promise<void> {
   await db.exercises.update(exerciseId, changes);
 }
@@ -90,6 +92,10 @@ export async function createRoutine(name: string): Promise<number> {
 
 export async function renameRoutine(routineId: number, name: string): Promise<void> {
   await db.routines.update(routineId, { name: name.trim() });
+}
+
+export async function setRoutineWeekdays(routineId: number, weekdays: number[]): Promise<void> {
+  await db.routines.update(routineId, { weekdays: [...weekdays].sort((a, b) => a - b) });
 }
 
 export async function deleteRoutine(routineId: number): Promise<'archived' | 'deleted'> {

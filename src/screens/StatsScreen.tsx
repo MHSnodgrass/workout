@@ -6,6 +6,7 @@ import { getBodyWeights } from '../db/bodyWeights';
 import { describeTrend, weightTrend } from '../lib/bodyWeight';
 import { formatDaysAgo, round1 } from '../lib/format';
 import { buildHeatmap } from '../lib/heatmap';
+import CoverageCard from '../components/CoverageCard';
 import Heatmap from '../components/Heatmap';
 
 export default function StatsScreen() {
@@ -35,6 +36,7 @@ export default function StatsScreen() {
     <div className="screen">
       <h1>Stats</h1>
       {heatmap && <Heatmap data={heatmap} />}
+      <CoverageCard />
       <Link to="/stats/body-weight">
         <div className="card row spread">
           <strong>Body weight</strong>
