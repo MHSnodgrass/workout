@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type Exercise, type RoutineExercise, type Session } from '../db/db';
-import { getLastTime } from '../db/queries';
-import { deleteSet, finishSession, logSet } from '../db/mutations';
-import { formatDate, formatSet, targetLabel } from '../lib/format';
+import { detectSessionPRs, getLastTime } from '../db/queries';
+import { deleteSet, finishSession, logSet, updateSessionNote } from '../db/mutations';
+import { formatDate, formatDuration, formatSet, metricLabel, round1, targetLabel } from '../lib/format';
 import ConfirmButton from '../components/ConfirmButton';
 import RestTimerBar from '../components/RestTimerBar';
 import { useToast } from '../components/Toast';
@@ -15,11 +15,65 @@ export default function LoggingScreen() {
   const session = useLiveQuery(() => db.sessions.get(id), [id]);
 
   if (!session) return <div className="screen">Loading…</div>;
-  return <ActiveWorkout session={session} />;
+  return session.finishedAt === null ? (
+    <ActiveWorkout session={session} />
+  ) : (
+    <SessionSummary session={session} />
+  );
+}
+
+function SessionSummary({ session }: { session: Session }) {
+  const navigate = useNavigate();
+  const toast = useToast();
+  const prs = useLiveQuery(() => detectSessionPRs(session.id!), [session.id]);
+  const setCount = useLiveQuery(
+    () => db.setLogs.where('sessionId').equals(session.id!).count(),
+    [session.id],
+  );
+  const [note, setNote] = useState(session.note ?? '');
+  const durationSec = Math.round(
+    ((session.finishedAt ?? session.startedAt) - session.startedAt) / 1000,
+  );
+
+  async function saveAndClose() {
+    try {
+      if (note.trim() !== (session.note ?? '')) await updateSessionNote(session.id!, note.trim());
+      navigate('/');
+    } catch {
+      toast("Couldn't save note");
+    }
+  }
+
+  return (
+    <div className="screen">
+      <h1>Workout complete</h1>
+      <p>
+        {setCount ?? 0} sets · {formatDuration(durationSec)}
+      </p>
+      {prs && prs.length > 0 && (
+        <div className="card pr-card">
+          <strong>New PRs 🎉</strong>
+          <ul>
+            {prs.map((p) => (
+              <li key={p.exerciseId}>
+                {p.exerciseName}: {metricLabel(p.metric)} {round1(p.value)}
+                {p.previousBest !== null ? ` (was ${round1(p.previousBest)})` : ' (first time)'}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <textarea
+        placeholder="Session note (optional)"
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+      />
+      <button className="primary big" onClick={saveAndClose}>Done</button>
+    </div>
+  );
 }
 
 function ActiveWorkout({ session }: { session: Session }) {
-  const navigate = useNavigate();
   const toast = useToast();
   const items = useLiveQuery(async () => {
     const res = await db.routineExercises
@@ -42,7 +96,6 @@ function ActiveWorkout({ session }: { session: Session }) {
   async function finish() {
     try {
       await finishSession(session.id!);
-      navigate('/');
     } catch {
       toast("Couldn't finish workout");
     }
