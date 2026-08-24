@@ -6,6 +6,7 @@ import { getSetting, setSetting } from '../db/settings';
 import { formatDate } from '../lib/format';
 import { DEFAULT_STALL_SESSIONS } from '../lib/progression';
 import { ACCENTS, DEFAULT_ACCENT_ID } from '../lib/theme';
+import { notificationPermission, requestNotificationPermission } from '../lib/useRestAlert';
 import { useToast } from '../components/Toast';
 
 export default function SettingsScreen() {
@@ -137,6 +138,7 @@ export default function SettingsScreen() {
           Adds a reps-in-reserve field to each set — how many you had left. Never changes the
           weight the app suggests.
         </p>
+        <RestAlertSetting />
       </div>
       <div className="card">
         <strong>Rest timer default</strong>
@@ -186,3 +188,58 @@ export default function SettingsScreen() {
     </div>
   );
 }
+
+/**
+ * Deliberately blunt copy. This works while you're in another app; it does not
+ * survive a locked phone for long, and promising otherwise would get someone
+ * stuck under a bar waiting for a buzz that isn't coming.
+ */
+function RestAlertSetting() {
+  const toast = useToast();
+  const enabled = useLiveQuery(() => getSetting<boolean>('restAlert', false), []);
+  const [permission, setPermission] = useState(notificationPermission);
+
+  async function toggle(next: boolean) {
+    if (!next) {
+      await setSetting('restAlert', false);
+      return;
+    }
+    // Asked on a tap, and only the first time — never on load.
+    const result = permission === 'granted' ? permission : await requestNotificationPermission();
+    setPermission(result);
+    if (result !== 'granted') {
+      toast(
+        result === 'unsupported'
+          ? "This browser can't show notifications"
+          : 'Notifications are blocked — allow them in your browser settings',
+      );
+      return;
+    }
+    await setSetting('restAlert', true);
+  }
+
+  return (
+    <>
+      <label className="row" style={{ marginTop: 12 }}>
+        <input
+          type="checkbox"
+          checked={enabled === true && permission === 'granted'}
+          onChange={(e) => void toggle(e.target.checked)}
+        />
+        <span>Buzz when rest ends</span>
+      </label>
+      <p className="small">
+        Sends a notification if you've switched to another app. It won't reliably reach you once
+        the phone has been locked for a few minutes — browsers stop background timers, and there's
+        no server here to wake the app. Don't count on it before a heavy set.
+      </p>
+      {enabled === true && permission === 'denied' && (
+        <p className="small">
+          Notifications are blocked for this site. Allow them in your browser settings and toggle
+          this again.
+        </p>
+      )}
+    </>
+  );
+}
+

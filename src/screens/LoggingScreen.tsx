@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Check, Timer, Trophy, X } from 'lucide-react';
-import { db, type Exercise, type RoutineExercise, type Session } from '../db/db';
+import { db, type Exercise, type RoutineExercise, type Session, type SetLog } from '../db/db';
 import { detectSessionPRs, getExerciseHistory } from '../db/queries';
 import { deleteSet, finishSession, logSet, updateSessionNote } from '../db/mutations';
 import { getSetting } from '../db/settings';
@@ -18,6 +18,8 @@ import {
 } from '../lib/format';
 import { MAX_RIR, parseRir } from '../lib/effort';
 import { DEFAULT_STALL_SESSIONS, suggestNext } from '../lib/progression';
+import { blockRestSeconds, groupBlocks, roundCompleted, totalRounds } from '../lib/supersets';
+import { useRestAlert } from '../lib/useRestAlert';
 import { useWakeLock } from '../lib/useWakeLock';
 import ConfirmButton from '../components/ConfirmButton';
 import RestTimerBar from '../components/RestTimerBar';
@@ -120,6 +122,8 @@ function ActiveWorkout({ session }: { session: Session }) {
     () => getSetting<number>('stallSessions', DEFAULT_STALL_SESSIONS),
     [],
   );
+  const restAlert = useLiveQuery(() => getSetting<boolean>('restAlert', false), []);
+  useRestAlert(restEndsAt, restAlert === true);
 
   function onSetLogged(restSeconds: number) {
     if (autoRest) setRestEndsAt(Date.now() + restSeconds * 1000);
@@ -146,18 +150,18 @@ function ActiveWorkout({ session }: { session: Session }) {
           Auto rest timer
         </label>
       </header>
-      {items?.map(({ re, exercise }) => (
-        <ExerciseCard
-          key={re.id}
-          session={session}
-          re={re}
-          exercise={exercise}
-          defaultIncrementLbs={defaultIncrement ?? 5}
-          stallSessions={stallSessions ?? DEFAULT_STALL_SESSIONS}
-          trackRir={trackRir === true}
-          onSetLogged={onSetLogged}
-        />
-      ))}
+      {items &&
+        groupBlocks(items.map(({ re, exercise }) => ({ ...re, re, exercise }))).map((block) => (
+          <WorkoutBlock
+            key={block[0].re.id}
+            session={session}
+            members={block}
+            defaultIncrementLbs={defaultIncrement ?? 5}
+            stallSessions={stallSessions ?? DEFAULT_STALL_SESSIONS}
+            trackRir={trackRir === true}
+            onRest={onSetLogged}
+          />
+        ))}
       <button className="primary big" onClick={finish}>Finish workout</button>
       {restEndsAt !== null && (
         <RestTimerBar
@@ -180,91 +184,116 @@ interface PendingRow {
   runningSince?: number;
 }
 
-function ExerciseCard({
+interface Member {
+  re: RoutineExercise;
+  exercise: Exercise;
+}
+
+/**
+ * One card's worth of work: a single exercise, or a superset of two or more.
+ *
+ * The two layouts share all their state because they only differ in two ways —
+ * how the rows are arranged, and when rest starts. A lone exercise rests after
+ * every set; a superset rests after every round. `roundCompleted` collapses
+ * both into one question, and answers `true` every time for a lone exercise,
+ * which is precisely the behaviour this screen had before supersets existed.
+ */
+function WorkoutBlock({
   session,
-  re,
-  exercise,
+  members,
   defaultIncrementLbs,
   stallSessions,
   trackRir,
-  onSetLogged,
+  onRest,
 }: {
   session: Session;
-  re: RoutineExercise;
-  exercise: Exercise;
+  members: Member[];
   defaultIncrementLbs: number;
   stallSessions: number;
   trackRir: boolean;
-  onSetLogged: (restSeconds: number) => void;
+  onRest: (restSeconds: number) => void;
 }) {
   const toast = useToast();
-  const logged = useLiveQuery(
-    () =>
-      db.setLogs
-        .where('sessionId')
-        .equals(session.id!)
-        .and((s) => s.exerciseId === exercise.id)
-        .sortBy('setNumber'),
-    [session.id, exercise.id],
-  );
+  const exerciseIds = members.map((m) => m.exercise.id!);
+  const idKey = exerciseIds.join(',');
+  const logged = useLiveQuery(async () => {
+    const all = await db.setLogs.where('sessionId').equals(session.id!).toArray();
+    return exerciseIds.map((id) =>
+      all.filter((s) => s.exerciseId === id).sort((a, b) => a.setNumber - b.setNumber),
+    );
+  }, [session.id, idKey]);
   // The whole history, not just last time: stall detection reads back through
   // it. getExerciseHistory only returns finished sessions, so the one being
   // logged right now is already excluded.
-  const history = useLiveQuery(() => getExerciseHistory(exercise.id!), [exercise.id]);
-  const [pending, setPending] = useState<PendingRow[] | null>(null);
+  const histories = useLiveQuery(() => Promise.all(exerciseIds.map(getExerciseHistory)), [idKey]);
+  // Keyed by exercise id; a missing key means "untouched, derive the defaults".
+  const [pending, setPending] = useState<Record<number, PendingRow[]>>({});
   const [now, setNow] = useState(() => Date.now());
 
   // Only rows the user has touched can hold a running timer, so `pending`
   // alone decides this — and it's available before the loading guard below.
-  const timerRunning = pending?.some((r) => r.runningSince !== undefined) ?? false;
+  const timerRunning = Object.values(pending).some((rows) =>
+    rows.some((r) => r.runningSince !== undefined),
+  );
   useEffect(() => {
     if (!timerRunning) return;
     const t = window.setInterval(() => setNow(Date.now()), 250);
     return () => window.clearInterval(t);
   }, [timerRunning]);
 
-  if (logged === undefined || history === undefined) return null;
-  const loggedSets = logged;
-  const lastTime = history.length > 0 ? history[history.length - 1] : null;
+  if (logged === undefined || histories === undefined) return null;
 
-  const suggestion = suggestNext(
-    history,
-    re,
-    exercise,
-    exercise.incrementLbs ?? defaultIncrementLbs,
-    stallSessions,
-  );
+  const state = members.map((member, i) => {
+    const history = histories[i];
+    const lastTime = history.length > 0 ? history[history.length - 1] : null;
+    const suggestion = suggestNext(
+      history,
+      member.re,
+      member.exercise,
+      member.exercise.incrementLbs ?? defaultIncrementLbs,
+      stallSessions,
+    );
+    const loggedSets = logged[i];
+    const rows: PendingRow[] =
+      pending[member.exercise.id!] ??
+      Array.from({ length: Math.max(member.re.targetSets - loggedSets.length, 0) }, (_, r) => ({
+        // The suggested load applies to every set; fall back to what was
+        // actually done set-for-set when there's nothing to suggest.
+        weight: String(
+          suggestion?.weightLbs ?? lastTime?.sets[loggedSets.length + r]?.weightLbs ?? '',
+        ),
+        amount: '',
+        rir: '',
+      }));
+    return { ...member, lastTime, suggestion, loggedSets, rows };
+  });
 
-  const rows: PendingRow[] =
-    pending ??
-    Array.from({ length: Math.max(re.targetSets - loggedSets.length, 0) }, (_, i) => ({
-      // The suggested load applies to every set; fall back to what was actually
-      // done set-for-set when there's nothing to suggest.
-      weight: String(
-        suggestion?.weightLbs ?? lastTime?.sets[loggedSets.length + i]?.weightLbs ?? '',
-      ),
-      amount: '',
-      rir: '',
-    }));
-
-  function updateRow(i: number, patch: Partial<PendingRow>) {
-    setPending(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  function setRows(memberIndex: number, rows: PendingRow[]) {
+    setPending((p) => ({ ...p, [members[memberIndex].exercise.id!]: rows }));
   }
 
-  function toggleTimer(i: number) {
-    const { runningSince } = rows[i];
+  function updateRow(memberIndex: number, i: number, patch: Partial<PendingRow>) {
+    setRows(
+      memberIndex,
+      state[memberIndex].rows.map((r, j) => (j === i ? { ...r, ...patch } : r)),
+    );
+  }
+
+  function toggleTimer(memberIndex: number, i: number) {
+    const { runningSince } = state[memberIndex].rows[i];
     if (runningSince === undefined) {
-      updateRow(i, { runningSince: Date.now() });
+      updateRow(memberIndex, i, { runningSince: Date.now() });
       setNow(Date.now());
     } else {
-      updateRow(i, {
+      updateRow(memberIndex, i, {
         amount: String(elapsedSeconds(runningSince, Date.now())),
         runningSince: undefined,
       });
     }
   }
 
-  async function logRow(i: number) {
+  async function logRow(memberIndex: number, i: number) {
+    const { exercise, loggedSets, rows } = state[memberIndex];
     const row = rows[i];
     const weight = row.weight.trim() === '' ? undefined : Number(row.weight);
     // Logging a still-running set stops the timer and uses its value, so the
@@ -300,110 +329,206 @@ function ExerciseCard({
         durationSeconds: exercise.type === 'timed' ? amount : undefined,
         rir: effort.value,
       });
-      setPending(rows.filter((_, j) => j !== i));
-      onSetLogged(exercise.defaultRestSeconds);
+      setRows(
+        memberIndex,
+        rows.filter((_, j) => j !== i),
+      );
+      // Counted from before the write, which is what roundCompleted expects.
+      const progress = state.map((s) => ({
+        targetSets: s.re.targetSets,
+        loggedSets: s.loggedSets.length,
+      }));
+      if (roundCompleted(progress, memberIndex)) {
+        onRest(blockRestSeconds(members.map((m) => m.exercise.defaultRestSeconds)));
+      }
     } catch {
       toast("Couldn't save — set not recorded");
     }
   }
 
-  return (
-    <div className="card">
+  async function removeSet(setLogId: number) {
+    try {
+      await deleteSet(setLogId);
+    } catch {
+      toast("Couldn't delete set");
+    }
+  }
+
+  function pendingRow(memberIndex: number, i: number) {
+    const { exercise, rows } = state[memberIndex];
+    const row = rows[i];
+    return (
+      <div className="set-row" key={`pending-${exercise.id}-${i}`}>
+        <input
+          type="number"
+          inputMode="decimal"
+          placeholder="lb"
+          value={row.weight}
+          onChange={(e) => updateRow(memberIndex, i, { weight: e.target.value })}
+        />
+        <input
+          type="number"
+          inputMode="numeric"
+          placeholder={exercise.type === 'timed' ? 'sec' : 'reps'}
+          value={
+            row.runningSince !== undefined
+              ? String(elapsedSeconds(row.runningSince, now))
+              : row.amount
+          }
+          onChange={(e) => updateRow(memberIndex, i, { amount: e.target.value })}
+          readOnly={row.runningSince !== undefined}
+        />
+        {trackRir && (
+          <input
+            className="rir-input"
+            type="number"
+            inputMode="numeric"
+            min={0}
+            max={MAX_RIR}
+            placeholder="RIR"
+            aria-label="Reps in reserve"
+            value={row.rir}
+            onChange={(e) => updateRow(memberIndex, i, { rir: e.target.value })}
+          />
+        )}
+        {exercise.type === 'timed' && (
+          <button
+            className={`small timer-btn${row.runningSince !== undefined ? ' running' : ''}`}
+            onClick={() => toggleTimer(memberIndex, i)}
+            aria-label={row.runningSince !== undefined ? 'Stop work timer' : 'Start work timer'}
+          >
+            {row.runningSince !== undefined ? (
+              formatClock(elapsedSeconds(row.runningSince, now))
+            ) : (
+              <Timer size={16} />
+            )}
+          </button>
+        )}
+        <button
+          className="primary icon-btn"
+          aria-label={`Log set — ${exercise.name}`}
+          onClick={() => logRow(memberIndex, i)}
+        >
+          <Check size={18} />
+        </button>
+        <button
+          className="small icon-btn"
+          aria-label="Discard set"
+          onClick={() =>
+            setRows(
+              memberIndex,
+              rows.filter((_, j) => j !== i),
+            )
+          }
+        >
+          <X size={16} />
+        </button>
+      </div>
+    );
+  }
+
+  function loggedLine(memberIndex: number, set: SetLog) {
+    return (
+      <div className="set-line" key={set.id}>
+        <span className="set-index">{String(set.setNumber).padStart(2, '0')}</span>
+        <SetValue set={set} type={state[memberIndex].exercise.type} />
+        <ConfirmButton labelText="Delete set" onConfirm={() => removeSet(set.id!)} />
+      </div>
+    );
+  }
+
+  const headers = state.map((s, i) => (
+    <div key={s.exercise.id} className={i > 0 ? 'member-head' : undefined}>
       <div className="row spread">
-        <strong>{exercise.name}</strong>
-        <span className="small">{targetLabel(re, exercise.type)}</span>
+        <strong>{s.exercise.name}</strong>
+        <span className="small">{targetLabel(s.re, s.exercise.type)}</span>
       </div>
       <div className="last-time">
-        {lastTime
-          ? `Last: ${lastTime.sets.map((s) => formatSet(s, exercise.type)).join(', ')} — ${formatDate(
-              lastTime.session.startedAt,
+        {s.lastTime
+          ? `Last: ${s.lastTime.sets.map((x) => formatSet(x, s.exercise.type)).join(', ')} — ${formatDate(
+              s.lastTime.session.startedAt,
             )}`
           : 'First time!'}
       </div>
-      {suggestion && (
-        <div className={`suggestion${suggestion.deload ? ' deload' : ''}`}>{suggestion.note}</div>
-      )}
-      {loggedSets.map((s) => (
-        <div className="set-line" key={s.id}>
-          <span className="set-index">{String(s.setNumber).padStart(2, '0')}</span>
-          <SetValue set={s} type={exercise.type} />
-          <ConfirmButton
-            labelText="Delete set"
-            onConfirm={async () => {
-              try {
-                await deleteSet(s.id!);
-              } catch {
-                toast("Couldn't delete set");
-              }
-            }}
-          />
+      {s.suggestion && (
+        <div className={`suggestion${s.suggestion.deload ? ' deload' : ''}`}>
+          {s.suggestion.note}
         </div>
-      ))}
-      {rows.map((row, i) => (
-        <div className="set-row" key={`pending-${i}`}>
-          <input
-            type="number"
-            inputMode="decimal"
-            placeholder="lb"
-            value={row.weight}
-            onChange={(e) => updateRow(i, { weight: e.target.value })}
-          />
-          <input
-            type="number"
-            inputMode="numeric"
-            placeholder={exercise.type === 'timed' ? 'sec' : 'reps'}
-            value={
-              row.runningSince !== undefined
-                ? String(elapsedSeconds(row.runningSince, now))
-                : row.amount
-            }
-            onChange={(e) => updateRow(i, { amount: e.target.value })}
-            readOnly={row.runningSince !== undefined}
-          />
-          {trackRir && (
-            <input
-              className="rir-input"
-              type="number"
-              inputMode="numeric"
-              min={0}
-              max={MAX_RIR}
-              placeholder="RIR"
-              aria-label="Reps in reserve"
-              value={row.rir}
-              onChange={(e) => updateRow(i, { rir: e.target.value })}
-            />
-          )}
-          {exercise.type === 'timed' && (
-            <button
-              className={`small timer-btn${row.runningSince !== undefined ? ' running' : ''}`}
-              onClick={() => toggleTimer(i)}
-              aria-label={row.runningSince !== undefined ? 'Stop work timer' : 'Start work timer'}
-            >
-              {row.runningSince !== undefined ? (
-                formatClock(elapsedSeconds(row.runningSince, now))
-              ) : (
-                <Timer size={16} />
-              )}
-            </button>
-          )}
-          <button className="primary icon-btn" aria-label="Log set" onClick={() => logRow(i)}>
-            <Check size={18} />
-          </button>
-          <button
-            className="small icon-btn"
-            aria-label="Discard set"
-            onClick={() => setPending(rows.filter((_, j) => j !== i))}
-          >
-            <X size={16} />
-          </button>
+      )}
+    </div>
+  ));
+
+  if (members.length === 1) {
+    return (
+      <div className="card">
+        {headers}
+        {state[0].loggedSets.map((set) => loggedLine(0, set))}
+        {state[0].rows.map((_, i) => pendingRow(0, i))}
+        <button
+          className="small"
+          style={{ marginTop: 8 }}
+          onClick={() => setRows(0, [...state[0].rows, { weight: '', amount: '', rir: '' }])}
+        >
+          + Add set
+        </button>
+      </div>
+    );
+  }
+
+  // Rounds are what you actually perform, so they order the card. A member
+  // simply stops appearing once it is out of sets, which is what makes pairing
+  // 3×bench with 4×rows need no reconciliation at all.
+  const rounds = totalRounds(
+    state.map((s) => ({
+      targetSets: s.re.targetSets,
+      loggedSets: s.loggedSets.length + s.rows.length,
+    })),
+  );
+
+  return (
+    <div className="card superset">
+      <div className="row spread">
+        <span className="eyebrow">Superset</span>
+        <span className="small">one rest after each round</span>
+      </div>
+      {headers}
+      {Array.from({ length: rounds }, (_, round) => (
+        <div className="round" key={round}>
+          <span className="eyebrow round-label">Round {round + 1}</span>
+          {state.map((s, i) => {
+            const set = s.loggedSets[round];
+            const rowIndex = round - s.loggedSets.length;
+            const body = set
+              ? loggedLine(i, set)
+              : rowIndex >= 0 && rowIndex < s.rows.length
+                ? pendingRow(i, rowIndex)
+                : null;
+            if (body === null) return null;
+            return (
+              // Named even once logged: the set index restarts per exercise, so
+              // two "01"s sit side by side in a round and read as a duplicate.
+              <div key={s.exercise.id}>
+                <div className="small member-label">{s.exercise.name}</div>
+                {body}
+              </div>
+            );
+          })}
         </div>
       ))}
       <button
         className="small"
         style={{ marginTop: 8 }}
-        onClick={() => setPending([...rows, { weight: '', amount: '', rir: '' }])}
+        onClick={() =>
+          setPending((p) => {
+            const next = { ...p };
+            state.forEach((s) => {
+              next[s.exercise.id!] = [...s.rows, { weight: '', amount: '', rir: '' }];
+            });
+            return next;
+          })
+        }
       >
-        + Add set
+        + Add round
       </button>
     </div>
   );

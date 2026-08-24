@@ -229,6 +229,30 @@ textarea { width: 100%; min-height: 70px; margin: 10px 0; font-family: var(--ui)
 .badge { background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 2px 10px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; }
 .card.big.scheduled { border-color: var(--accent); }
 
+/* Divides your own exercises from the seeded library inside the picker. */
+.seed-head { margin-top: 16px; padding-top: 10px; border-top: 1px solid var(--hairline); }
+
+/* ---- Supersets ----------------------------------------------------- */
+
+/* In the editor each exercise keeps its own card — targets need the room — so
+   the pairing is shown by bracketing them instead of merging them. */
+.superset-block {
+  border-left: 2px solid var(--accent);
+  padding-left: 10px;
+  margin-bottom: 10px;
+}
+.superset-block .card:last-child { margin-bottom: 0; }
+
+/* While logging, the pair really is one card: rounds are what you perform.
+   The accent left rule is the same mark the editor uses, so "these are paired"
+   reads the same on both screens. A full accent border shouted over the round
+   labels, which are the part that actually tells you where you are. */
+.card.superset { border-left: 2px solid var(--accent); }
+.member-head { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--hairline); }
+.round { margin-top: 14px; }
+.round-label { display: block; margin-bottom: 4px; color: var(--accent); }
+.member-label { margin-bottom: 2px; }
+
 /* ---- Tab bar ------------------------------------------------------- */
 
 .tabbar {

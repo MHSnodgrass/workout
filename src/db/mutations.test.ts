@@ -9,9 +9,12 @@ import {
   deleteRoutine,
   deleteSession,
   finishSession,
+  linkSuperset,
   logSet,
   moveRoutineExercise,
+  removeRoutineExercise,
   startSession,
+  unlinkSuperset,
 } from './mutations';
 import { getSetting, setSetting } from './settings';
 import { resetDb, seedExercise, seedRoutine, seedSession, seedSet } from '../test/helpers';
@@ -59,6 +62,18 @@ describe('createExercise', () => {
     await expect(createExercise('  bench press ', 'weighted', 90)).rejects.toBeInstanceOf(
       DuplicateExerciseNameError,
     );
+  });
+
+  it('stores muscle groups when the library supplies them', async () => {
+    const id = await createExercise('Barbell Squat', 'weighted', 90, ['Quads', 'Glutes']);
+    expect((await db.exercises.get(id))?.muscleGroups).toEqual(['Quads', 'Glutes']);
+  });
+
+  it('leaves muscleGroups unset when none are given', async () => {
+    // Absent, not []: an untagged exercise and one tagged with nothing are the
+    // same thing to the coverage card, and storing [] just adds a lie to backups.
+    const id = await createExercise('Face Pull', 'weighted', 90);
+    expect((await db.exercises.get(id))?.muscleGroups).toBeUndefined();
   });
 });
 
@@ -121,6 +136,56 @@ describe('addExerciseToRoutine / moveRoutineExercise', () => {
     const reCarry = await addExerciseToRoutine(r, carry);
     expect((await db.routineExercises.get(reLift))?.targetRepsMin).toBe(8);
     expect((await db.routineExercises.get(reCarry))?.targetDurationSeconds).toBe(60);
+  });
+});
+
+describe('supersets', () => {
+  async function routineOf(n: number): Promise<{ routineId: number; ids: number[] }> {
+    const routineId = await seedRoutine();
+    const ids: number[] = [];
+    for (let i = 0; i < n; i += 1) {
+      ids.push(await addExerciseToRoutine(routineId, await seedExercise()));
+    }
+    return { routineId, ids };
+  }
+
+  async function groupsOf(routineId: number): Promise<(number | undefined)[]> {
+    const rows = await db.routineExercises.where('routineId').equals(routineId).sortBy('order');
+    return rows.map((r) => r.supersetGroup);
+  }
+
+  async function orderedIds(routineId: number): Promise<(number | undefined)[]> {
+    const rows = await db.routineExercises.where('routineId').equals(routineId).sortBy('order');
+    return rows.map((r) => r.id);
+  }
+
+  it('links an exercise to the one above it and unlinks the pair again', async () => {
+    const { routineId, ids } = await routineOf(2);
+    await linkSuperset(routineId, ids[1]);
+    const [first, second] = await groupsOf(routineId);
+    expect(first).toBeDefined();
+    expect(second).toBe(first);
+
+    await unlinkSuperset(routineId, ids[1]);
+    expect(await groupsOf(routineId)).toEqual([undefined, undefined]);
+  });
+
+  it('moves a linked pair as one block', async () => {
+    const { routineId, ids } = await routineOf(3);
+    await linkSuperset(routineId, ids[2]); // pair up the last two
+    await moveRoutineExercise(routineId, ids[1], -1);
+    expect(await orderedIds(routineId)).toEqual([ids[1], ids[2], ids[0]]);
+    // …and the pair survived the move.
+    const groups = await groupsOf(routineId);
+    expect(groups[0]).toBe(groups[1]);
+    expect(groups[2]).toBeUndefined();
+  });
+
+  it('dissolves the group when removing one half of a pair', async () => {
+    const { routineId, ids } = await routineOf(2);
+    await linkSuperset(routineId, ids[1]);
+    await removeRoutineExercise(ids[1]);
+    expect(await groupsOf(routineId)).toEqual([undefined]);
   });
 });
 

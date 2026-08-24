@@ -7,9 +7,10 @@ mechanics, not code (AGPL — clean-room implementations only).
 
 Reviewed 2026-08-24. Ordered roughly by value-for-effort within each tier.
 
-**Status as of 2026-08-24** — shipped: #1–#9, #12, #13, #15. Remaining: #10,
-#11 and #14. Each item below is marked, with a note on what actually landed
-where it differs from the plan.
+**Status as of 2026-08-24 — everything on this list has shipped.** #1–#15 are
+all done. Each item below is marked, with a note on what actually landed where
+it differs from the plan. What remains is only the small unbuilt pieces called
+out under "What's left".
 
 ---
 
@@ -175,7 +176,7 @@ openGym's est. 1RM display names which set produced it ("185×5 on Aug 12").
 
 ## Tier 4 — Bigger lifts (decide deliberately before starting)
 
-### 10. Seeded exercise library — ☐ not started
+### 10. Seeded exercise library — ✅ shipped
 openGym ships 1,324 exercises with animated demos and equipment filters.
 - **How for us:** Import a permissively-licensed dataset (e.g.
   [free-exercise-db](https://github.com/yuhonas/free-exercise-db), public
@@ -185,31 +186,63 @@ openGym ships 1,324 exercises with animated demos and equipment filters.
 - **Why/why not:** Nice for discovering exercises + gets muscle tags (#8)
   for free; but Matthew's library is self-defined and small — only worth it
   if #8 is wanted without manual tagging.
-- **State as of 2026-08-24 — chosen, not yet designed.** The rationale above
-  has shifted: #8 shipped *with* manual tagging, so this is no longer the
-  only route to muscle data. What it's now worth is discovery, and killing
-  the tagging chore for anything new.
-  Open questions to settle before coding: whether the dataset ships in the
-  bundle or as a lazy chunk (it's ~1,300 entries — this is the whole
-  decision, since the logging path must stay light); how free-exercise-db's
-  `primaryMuscles`/`secondaryMuscles` map onto our fixed ten in
-  `lib/muscles.ts`; and whether a picked entry is copied into `exercises`
-  (keeping backups self-contained, as planned) or referenced by id.
+- **Landed** for discovery and to kill the tagging chore for anything new —
+  #8 had already shipped with manual tagging, so this was never the only route
+  to muscle data.
+  - **free-exercise-db has 873 entries, not 1,324** — that was openGym's own
+    count. Trimmed to the five fields the picker reads it is 98 kB raw,
+    **9 kB gzipped**.
+  - **Vendored, not fetched at build time.** `npm run exercises` writes
+    `src/data/seedExercises.ts` and the result is committed, so the Pages
+    deploy has no network call in it that can fail or silently drift.
+  - **Its own lazy chunk**, imported when the picker opens. 9 kB over the wire
+    is nothing, but 98 kB of JSON to parse at boot is not free on a phone.
+    Precached by the service worker, so it still works offline.
+  - **Primary muscles only.** Tagging secondaries would put a bench press
+    under Chest, Shoulders *and* Triceps, and every coverage bar in #8 would
+    read full no matter what you trained. Seventeen names collapse onto our
+    ten; abductors and adductors are filed under Glutes, and **forearms and
+    neck are deliberately unmapped** — our vocabulary has no group for them,
+    so those import untagged rather than mistagged.
+  - **Type is derived, then confirmed.** `force: "static"` → timed (Plank
+    resolves correctly), `equipment: "body only"` → bodyweight, else weighted.
+    Since `type` can't be changed once an exercise exists, the picker shows it
+    as an editable default rather than applying it silently.
+  - **Copied into `exercises`**, so backups stay self-contained and you can
+    rename and retune the entry.
+  - Search ranks in three tiers — loaded work, then drills, then stretches.
+    A name match alone ranked badly: searching "chest" led with medicine-ball
+    plyometrics called "Chest Push" while every bench press sat below them.
+    Cardio's 14 entries are excluded per the spec decision; results cap at 30
+    with the true total shown, never a silent truncation.
 
-### 11. Supersets — ☐ not started
+### 11. Supersets — ✅ shipped
 Pair two exercises, alternate their set rows, one rest after the pair.
-- **How:** `supersetGroup` field on `RoutineExercise`; logging screen
-  interleaves cards. Was deliberately cut from v1 — revisit only if the
-  actual training style changes.
-- **State as of 2026-08-24 — chosen, not yet designed.** Things that have
-  changed under it since it was cut, and that a design has to answer:
-  rest is currently started per exercise by `onSetLogged(defaultRestSeconds)`
-  in `LoggingScreen`, so "one rest after the pair" means the trigger moves
-  from the set to the group. Progression (`suggestNext`) is per exercise and
-  should stay that way — a superset changes the *order* sets are performed,
-  not what each lift should be loaded to. Also needs deciding: whether the
-  pair renders as one merged card or two linked cards, and what happens when
-  the two exercises have different `targetSets`.
+- **Landed** as `RoutineExercise.supersetGroup?: number`, with every rule in
+  `src/lib/supersets.ts`. Two ideas carry the whole feature:
+  - **A group is adjacency plus a shared id.** A superset is performed
+    back-to-back by definition, so members must sit next to each other, and
+    `groupBlocks` becomes the single place grouping is decided. Both screens
+    render blocks; a routine with no supersets is a list of one-member blocks.
+    Reordering moves whole blocks, so a pair can't be torn in half — and the
+    editor shows one set of arrows per block, not one per row.
+  - **The unit of work is a round, not a set.** Rest belongs to the round.
+    `roundCompleted` answers "does rest start now?" for both layouts and
+    returns true every time for a lone exercise, which is exactly the
+    behaviour the screen had before supersets existed.
+- **Mismatched `targetSets` needed no reconciliation.** Rounds run to the
+  longer exercise and a member stops appearing once it is out of sets, so
+  3×bench with 4×rows just finishes round 4 on rows alone. Rest is the
+  *longest* rest in the block — you rest after the harder half.
+- **Progression is untouched and per exercise**, as planned: a superset
+  changes the order sets are performed in, not what either lift is loaded to.
+- The editor keeps one card per exercise (targets need the room) and brackets
+  the pair with an accent rule; the logging screen merges them into one card
+  ordered by round. Every row inside a round is labelled with its exercise —
+  the set index restarts per exercise, so two "01"s sat side by side and read
+  as a duplicate.
+- **No `SCHEMA_VERSION` bump** — a new optional field on an existing table,
+  per the convention below. Backups carry whole rows, so it rides along.
 
 ### 12. Weekly schedule ("today is Workout B day") — ✅ shipped
 openGym assigns routines to weekdays; Home would highlight today's plan.
@@ -244,7 +277,7 @@ start.
   moved out of `heatmap.ts` into `src/lib/dates.ts`.
 - **Not done:** openGym's prompt-at-session-start. Home is enough.
 
-### 14. Rest-timer alert when you've switched away — ☐ not started
+### 14. Rest-timer alert when you've switched away — ✅ shipped
 **What it is, plainly:** you finish a set, the rest timer starts, you switch
 to Instagram or your phone screen goes off — and right now nothing tells you
 rest is up. The timer only counts while the app is on screen. This would buzz
@@ -262,9 +295,22 @@ or ping you when it hits zero regardless of what you're looking at.
     on during a workout, so in the intended flow — phone propped up, screen
     awake — the timer is already visible and this adds nothing. It earns its
     keep specifically when you leave the app mid-rest.
-- **Would need:** notification permission (asked once, in Settings, not on
-  first load), a Settings toggle, and honest copy about the lock-screen
-  limit so it isn't relied on for a heavy set.
+- **Landed** as setting `restAlert`, default off, in the During-workouts card.
+  Permission is requested **on the toggle tap** — never on load — and the
+  toggle refuses to turn on if permission isn't granted.
+  - **The one real mechanism change:** the rest bar's 250 ms interval is
+    throttled to a crawl in a hidden tab, so it would notice the end of a rest
+    long after it happened. `lib/restAlert.ts` schedules a timer for the exact
+    end instead. Chrome throttles hidden-tab timers to ~1 s until the page has
+    been hidden five minutes, then to ~1/minute — which is exactly why the
+    realistic/not-achievable split above holds.
+  - Fires through `registration.showNotification` (Android Chrome throws on
+    the `Notification` constructor), falling back to the constructor on
+    desktop, and clears the notification when you come back to the app.
+  - **Silent while the app is on screen.** The rest bar is already saying
+    "Go!" and vibrating; a notification on top of that is noise.
+  - Settings copy states the lock-screen limit outright rather than implying
+    an alarm — someone shouldn't wait under a bar for a buzz that isn't coming.
 
 ---
 
@@ -331,19 +377,20 @@ Added and done 2026-08-24. The app worked but read as generic dark-Bootstrap
 
 ## What's left
 
-Every feature worth stealing has been stolen, and the design pass is done.
-What's left is only the deliberate-decision pile:
+Every feature on this list is built. What remains are the small pieces that
+were deliberately scoped out along the way, each noted in its own entry above:
 
-1. **#10 seeded exercise library** and **#11 supersets** — both need a
-   decision before any code. These are next.
-2. **#14 rest alert when you've switched away** — kept in scope. Read that
-   entry before scoping it: the backgrounded case is doable, a guaranteed
-   lock-screen alarm is not, and the wake lock already covers the flow where
-   the phone stays propped up and awake.
+- **#8** — the routine-balance preview while editing ("this plan misses
+  hamstrings"), and the front/back body-figure SVGs. The preview is the more
+  useful of the two.
+- **#13** — openGym's prompt-for-weight at session start. Home is enough.
+- **#5** — deloads for bodyweight work. "Drop a set" is a different decision
+  from "drop the load", and inventing it wasn't warranted.
+- **#10** — the picker searches names, equipment and muscle groups, but not
+  the dataset's `category`, `level` or `mechanic`. Filters would be the next
+  thing worth adding if 30 results ever stops being enough.
 
-Smaller unbuilt pieces, noted where they belong: #8's routine-balance
-preview and body figures, #13's prompt-at-session-start, and deloads for
-bodyweight work.
+None of these is blocked; none is obviously worth doing yet.
 
 ### Conventions these were built to
 - Pure logic lives in `src/lib/` with vitest tests; TDD.
@@ -365,3 +412,13 @@ bodyweight work.
   printing `formatSet` into a div.
 - Anything pinned above the tab bar offsets by `--above-tabs`, never a
   hardcoded pixel value — that's what keeps it clear of a gesture bar.
+- Vendored data is generated by a script under `scripts/` and **committed**,
+  never fetched during the build. `npm run exercises` regenerates
+  `src/data/seedExercises.ts`; the deploy stays hermetic and the diff stays
+  reviewable. Anything that size is imported dynamically so it can't land in
+  the chunk you wait on at the gym — check the build output, not the import
+  graph.
+- Browser APIs get a plain-TS controller with injected dependencies
+  (`wakeLock.ts`, `restAlert.ts`) plus a thin hook, so the awkward part —
+  re-acquiring on visibility change, scheduling against a throttled timer —
+  is testable in the node environment.

@@ -1,5 +1,6 @@
 import { db } from './db';
 import type { Exercise, ExerciseType, RoutineExercise, SetLog } from './db';
+import { linkToPrevious, reorderBlocks, unlink } from '../lib/supersets';
 import { exerciseHasHistory, routineHasHistory } from './queries';
 
 export class ActiveSessionExistsError extends Error {
@@ -56,13 +57,22 @@ export async function createExercise(
   name: string,
   type: ExerciseType,
   defaultRestSeconds: number,
+  muscleGroups?: string[],
 ): Promise<number> {
   const trimmed = name.trim();
   const clash = await db.exercises
     .filter((e) => e.archived === 0 && e.name.toLowerCase() === trimmed.toLowerCase())
     .first();
   if (clash) throw new DuplicateExerciseNameError(trimmed);
-  return db.exercises.add({ name: trimmed, type, defaultRestSeconds, archived: 0 });
+  return db.exercises.add({
+    name: trimmed,
+    type,
+    defaultRestSeconds,
+    archived: 0,
+    // Left off entirely when empty: untagged and tagged-with-nothing mean the
+    // same thing to the coverage card, and storing [] only bloats backups.
+    ...(muscleGroups && muscleGroups.length > 0 ? { muscleGroups } : {}),
+  });
 }
 
 export async function updateExercise(
@@ -131,7 +141,43 @@ export async function updateRoutineExercise(
 }
 
 export async function removeRoutineExercise(id: number): Promise<void> {
-  await db.routineExercises.delete(id);
+  await db.transaction('rw', db.routineExercises, async () => {
+    const row = await db.routineExercises.get(id);
+    await db.routineExercises.delete(id);
+    if (!row || row.supersetGroup === undefined) return;
+    // Removing half a pair would otherwise leave the survivor wearing a link to
+    // nothing. unlink() already knows to dissolve a group of one.
+    const rows = await db.routineExercises.where('routineId').equals(row.routineId).sortBy('order');
+    await clearGroups(unlink([row, ...rows], id));
+  });
+}
+
+async function clearGroups(changes: { id: number; supersetGroup: undefined }[]): Promise<void> {
+  for (const change of changes) {
+    const row = await db.routineExercises.get(change.id);
+    if (!row) continue;
+    // Written back as a whole row: Dexie's update() treats an undefined value
+    // as "leave it alone", so it cannot remove a key.
+    delete row.supersetGroup;
+    await db.routineExercises.put(row);
+  }
+}
+
+/** Pair an exercise with the one above it. See lib/supersets.ts for the rules. */
+export async function linkSuperset(routineId: number, routineExerciseId: number): Promise<void> {
+  await db.transaction('rw', db.routineExercises, async () => {
+    const rows = await db.routineExercises.where('routineId').equals(routineId).sortBy('order');
+    for (const change of linkToPrevious(rows, routineExerciseId)) {
+      await db.routineExercises.update(change.id, { supersetGroup: change.supersetGroup });
+    }
+  });
+}
+
+export async function unlinkSuperset(routineId: number, routineExerciseId: number): Promise<void> {
+  await db.transaction('rw', db.routineExercises, async () => {
+    const rows = await db.routineExercises.where('routineId').equals(routineId).sortBy('order');
+    await clearGroups(unlink(rows, routineExerciseId));
+  });
 }
 
 export async function moveRoutineExercise(
@@ -141,11 +187,9 @@ export async function moveRoutineExercise(
 ): Promise<void> {
   await db.transaction('rw', db.routineExercises, async () => {
     const rows = await db.routineExercises.where('routineId').equals(routineId).sortBy('order');
-    const index = rows.findIndex((r) => r.id === routineExerciseId);
-    const neighbor = rows[index + direction];
-    if (index === -1 || !neighbor) return;
-    const current = rows[index];
-    await db.routineExercises.update(current.id!, { order: neighbor.order });
-    await db.routineExercises.update(neighbor.id!, { order: current.order });
+    // Whole blocks move, so a superset can't be torn in half by reordering.
+    for (const change of reorderBlocks(rows, routineExerciseId, direction)) {
+      await db.routineExercises.update(change.id, { order: change.order });
+    }
   });
 }

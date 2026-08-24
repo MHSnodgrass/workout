@@ -31,6 +31,11 @@ export interface RoutineExercise {
   targetRepsMin?: number;
   targetRepsMax?: number;
   targetDurationSeconds?: number;
+  /**
+   * Shared id marking a superset. Members must be adjacent in `order` — see
+   * lib/supersets.ts, which owns every rule about them.
+   */
+  supersetGroup?: number;
 }
 
 export interface Session {

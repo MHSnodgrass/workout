@@ -1,21 +1,25 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { ChevronDown, ChevronUp, Pencil } from 'lucide-react';
+import { ChevronDown, ChevronUp, Link2, Pencil, Unlink2 } from 'lucide-react';
 import { db, type Exercise, type ExerciseType, type Routine, type RoutineExercise } from '../db/db';
 import {
   DuplicateExerciseNameError,
   addExerciseToRoutine,
   createExercise,
+  linkSuperset,
   moveRoutineExercise,
   removeRoutineExercise,
   renameRoutine,
   setRoutineWeekdays,
+  unlinkSuperset,
   updateRoutineExercise,
 } from '../db/mutations';
 import { getSetting } from '../db/settings';
 import { targetLabel } from '../lib/format';
 import { WEEKDAYS, scheduleLabel } from '../lib/schedule';
+import { mapSeedMuscles, searchSeed, seedType, type SeedExercise } from '../lib/seedLibrary';
+import { groupBlocks } from '../lib/supersets';
 import ConfirmButton from '../components/ConfirmButton';
 import { useToast } from '../components/Toast';
 
@@ -54,15 +58,34 @@ export default function RoutineEditorScreen() {
         }}
       />
       <WeekdayPicker routine={routine} />
-      {items.map(({ re, exercise }, i) => (
-        <RoutineExerciseRow
-          key={re.id}
-          re={re}
-          exercise={exercise}
-          isFirst={i === 0}
-          isLast={i === items.length - 1}
-        />
-      ))}
+      {groupBlocks(items.map(({ re, exercise }) => ({ ...re, re, exercise }))).map(
+        (block, blockIndex, blocks) => {
+          const rows = block.map(({ re, exercise }, memberIndex) => (
+            <RoutineExerciseRow
+              key={re.id}
+              re={re}
+              exercise={exercise}
+              isFirst={blockIndex === 0}
+              isLast={blockIndex === blocks.length - 1}
+              // Reordering moves whole blocks, so a pair gets one set of arrows,
+              // on its first member — not two that do the same thing.
+              canMove={memberIndex === 0}
+              paired={block.length > 1}
+            />
+          ));
+          return block.length === 1 ? (
+            rows
+          ) : (
+            <div className="superset-block" key={block[0].re.id}>
+              <div className="row spread">
+                <span className="eyebrow">Superset</span>
+                <span className="small">one rest after each round</span>
+              </div>
+              {rows}
+            </div>
+          );
+        },
+      )}
       {showPicker ? (
         <ExercisePicker
           routineId={rid}
@@ -120,11 +143,15 @@ function RoutineExerciseRow({
   exercise,
   isFirst,
   isLast,
+  canMove,
+  paired,
 }: {
   re: RoutineExercise;
   exercise: Exercise;
   isFirst: boolean;
   isLast: boolean;
+  canMove: boolean;
+  paired: boolean;
 }) {
   const toast = useToast();
   const [editing, setEditing] = useState(false);
@@ -137,26 +164,48 @@ function RoutineExerciseRow({
     }
   }
 
+  async function toggleLink() {
+    try {
+      if (paired) await unlinkSuperset(re.routineId, re.id!);
+      else await linkSuperset(re.routineId, re.id!);
+    } catch {
+      toast("Couldn't change the superset");
+    }
+  }
+
   return (
     <div className="card">
       <div className="row spread">
         <strong>{exercise.name}</strong>
         <div className="row">
+          {canMove && (
+            <>
+              <button
+                className="small icon-btn"
+                aria-label="Move up"
+                disabled={isFirst}
+                onClick={() => move(-1)}
+              >
+                <ChevronUp size={16} />
+              </button>
+              <button
+                className="small icon-btn"
+                aria-label="Move down"
+                disabled={isLast}
+                onClick={() => move(1)}
+              >
+                <ChevronDown size={16} />
+              </button>
+            </>
+          )}
           <button
             className="small icon-btn"
-            aria-label="Move up"
-            disabled={isFirst}
-            onClick={() => move(-1)}
+            // Only ever links upward, so the first row has nothing to pair with.
+            aria-label={paired ? 'Break up superset' : 'Superset with the exercise above'}
+            disabled={!paired && isFirst}
+            onClick={toggleLink}
           >
-            <ChevronUp size={16} />
-          </button>
-          <button
-            className="small icon-btn"
-            aria-label="Move down"
-            disabled={isLast}
-            onClick={() => move(1)}
-          >
-            <ChevronDown size={16} />
+            {paired ? <Unlink2 size={16} /> : <Link2 size={16} />}
           </button>
           <button
             className="small icon-btn"
@@ -258,7 +307,7 @@ function ExercisePicker({
   const [newName, setNewName] = useState('');
   const [newType, setNewType] = useState<ExerciseType>('weighted');
   const globalRest = useLiveQuery(() => getSetting<number>('globalRestSeconds', 90), []);
-  const matches = useLiveQuery(async () => {
+  const mine = useLiveQuery(async () => {
     const all = await db.exercises.filter((e) => e.archived === 0).toArray();
     const query = q.trim().toLowerCase();
     return all.filter(
@@ -275,10 +324,14 @@ function ExercisePicker({
     }
   }
 
-  async function createAndAdd() {
-    if (!newName.trim()) return;
+  async function createAndAdd(
+    name: string,
+    type: ExerciseType,
+    muscleGroups?: string[],
+  ): Promise<void> {
+    if (!name.trim()) return;
     try {
-      const id = await createExercise(newName, newType, globalRest ?? 90);
+      const id = await createExercise(name, type, globalRest ?? 90, muscleGroups);
       await addExerciseToRoutine(routineId, id);
       onDone();
     } catch (e) {
@@ -296,7 +349,7 @@ function ExercisePicker({
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search exercises" />
         <button className="small" onClick={onDone}>Cancel</button>
       </div>
-      {matches?.map((e) => (
+      {mine?.map((e) => (
         <div key={e.id} className="row spread" style={{ marginTop: 8 }}>
           <span>
             {e.name} <span className="small">({e.type})</span>
@@ -304,6 +357,7 @@ function ExercisePicker({
           <button className="small primary" onClick={() => pick(e.id!)}>Add</button>
         </div>
       ))}
+      {mine?.length === 0 && <p className="small">Nothing of yours matches.</p>}
       {creating ? (
         <div className="row" style={{ marginTop: 12 }}>
           <input
@@ -316,13 +370,115 @@ function ExercisePicker({
             <option value="bodyweight">Bodyweight</option>
             <option value="timed">Timed</option>
           </select>
-          <button className="primary small" onClick={createAndAdd}>Create</button>
+          <button className="primary small" onClick={() => createAndAdd(newName, newType)}>
+            Create
+          </button>
         </div>
       ) : (
         <button className="small" style={{ marginTop: 12 }} onClick={() => setCreating(true)}>
           + New exercise
         </button>
       )}
+      <SeedResults query={q} onAdd={createAndAdd} />
     </div>
+  );
+}
+
+/**
+ * The seeded library, below your own exercises — yours are what you actually
+ * train, so they stay on top. The dataset is imported on open rather than at
+ * boot: it is ~100 kB of JSON that the logging path has no use for.
+ */
+function SeedResults({
+  query,
+  onAdd,
+}: {
+  query: string;
+  onAdd: (name: string, type: ExerciseType, muscleGroups?: string[]) => Promise<void>;
+}) {
+  const [library, setLibrary] = useState<SeedExercise[] | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [pickedType, setPickedType] = useState<ExerciseType>('weighted');
+  // Excludes by name, matching what createExercise would reject, so the picker
+  // never offers something that can only fail.
+  const taken = useLiveQuery(async () => {
+    const all = await db.exercises.filter((e) => e.archived === 0).toArray();
+    return new Set(all.map((e) => e.name.toLowerCase()));
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    void import('../data/seedExercises').then((m) => {
+      if (alive) setLibrary(m.SEED_EXERCISES);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  if (library === null || taken === undefined) return null;
+  const { results, total } = searchSeed(library, query, { exclude: taken });
+
+  return (
+    <>
+      <div className="row spread seed-head">
+        <span className="eyebrow">From the library</span>
+        <span className="small">
+          {total === 0
+            ? 'no matches'
+            : results.length < total
+              ? `${results.length} of ${total}`
+              : `${total}`}
+        </span>
+      </div>
+      {total === 0 && <p className="small">Nothing in the library matches — name it yourself.</p>}
+      {results.map((e) => {
+        const groups = mapSeedMuscles(e.primaryMuscles);
+        const isOpen = expanded === e.name;
+        return (
+          <div key={e.name} style={{ marginTop: 8 }}>
+            <div className="row spread">
+              <span>
+                {e.name}{' '}
+                <span className="small">
+                  ({groups.length > 0 ? groups.join(' · ') : 'untagged'})
+                </span>
+              </span>
+              <button
+                className="small"
+                aria-expanded={isOpen}
+                onClick={() => {
+                  setExpanded(isOpen ? null : e.name);
+                  setPickedType(seedType(e));
+                }}
+              >
+                {isOpen ? 'Cancel' : 'Add'}
+              </button>
+            </div>
+            {isOpen && (
+              <div className="row" style={{ marginTop: 6 }}>
+                {/* Type can't be changed once an exercise exists, so it is
+                    confirmed here rather than guessed silently. */}
+                <select
+                  aria-label="Exercise type"
+                  value={pickedType}
+                  onChange={(ev) => setPickedType(ev.target.value as ExerciseType)}
+                >
+                  <option value="weighted">Weighted</option>
+                  <option value="bodyweight">Bodyweight</option>
+                  <option value="timed">Timed</option>
+                </select>
+                <button
+                  className="primary small"
+                  onClick={() => void onAdd(e.name, pickedType, groups)}
+                >
+                  Add {e.name}
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </>
   );
 }
