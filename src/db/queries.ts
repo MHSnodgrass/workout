@@ -1,5 +1,6 @@
 import { db } from './db';
 import type { Session, SetLog } from './db';
+import { defaultMetricFor, metricValue, type MetricKey } from '../lib/metrics';
 
 export interface SessionSets {
   session: Session;
@@ -51,4 +52,42 @@ export async function exerciseHasHistory(exerciseId: number): Promise<boolean> {
 
 export async function routineHasHistory(routineId: number): Promise<boolean> {
   return (await db.sessions.where('routineId').equals(routineId).count()) > 0;
+}
+
+export interface PRResult {
+  exerciseId: number;
+  exerciseName: string;
+  metric: MetricKey;
+  value: number;
+  previousBest: number | null;
+}
+
+export async function detectSessionPRs(sessionId: number): Promise<PRResult[]> {
+  const session = await db.sessions.get(sessionId);
+  if (!session) return [];
+  const sets = await db.setLogs.where('sessionId').equals(sessionId).toArray();
+  const byExercise = new Map<number, SetLog[]>();
+  for (const s of sets) {
+    const arr = byExercise.get(s.exerciseId);
+    if (arr) arr.push(s);
+    else byExercise.set(s.exerciseId, [s]);
+  }
+  const results: PRResult[] = [];
+  for (const [exerciseId, exSets] of byExercise) {
+    const exercise = await db.exercises.get(exerciseId);
+    if (!exercise) continue;
+    const metric = defaultMetricFor(exercise.type);
+    const value = metricValue(metric, exSets);
+    if (value <= 0) continue;
+    const history = await getExerciseHistory(exerciseId);
+    const earlier = history.filter(
+      (h) => h.session.id !== sessionId && h.session.startedAt < session.startedAt,
+    );
+    const previousBest =
+      earlier.length > 0 ? Math.max(...earlier.map((h) => metricValue(metric, h.sets))) : null;
+    if (previousBest === null || value > previousBest) {
+      results.push({ exerciseId, exerciseName: exercise.name, metric, value, previousBest });
+    }
+  }
+  return results;
 }
