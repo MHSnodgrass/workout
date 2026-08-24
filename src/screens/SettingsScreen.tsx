@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Check } from 'lucide-react';
 import { buildBackup, importBackup, validateBackup, type BackupFile } from '../db/backup';
 import { getSetting, setSetting } from '../db/settings';
 import { formatDate } from '../lib/format';
+import { ensurePersisted, formatBytes, type PersistenceState } from '../lib/persistence';
+import { DEFAULT_BAR_LBS, DEFAULT_PLATES } from '../lib/plates';
 import { DEFAULT_STALL_SESSIONS } from '../lib/progression';
 import { ACCENTS, DEFAULT_ACCENT_ID } from '../lib/theme';
 import { notificationPermission, requestNotificationPermission } from '../lib/useRestAlert';
@@ -71,6 +73,7 @@ export default function SettingsScreen() {
   return (
     <div className="screen">
       <h1>Settings</h1>
+      <DataSafetyCard />
       <div className="card">
         <strong>Backup</strong>
         <p className="small">
@@ -185,6 +188,108 @@ export default function SettingsScreen() {
           Drops about 10%, rounded to the exercise's increment. Weighted exercises only.
         </p>
       </div>
+      <BarbellCard />
+    </div>
+  );
+}
+
+/**
+ * The bar and the rack. These drive the plate breakdown and the warm-up ramp,
+ * and only for exercises marked as barbell lifts in the Routines tab.
+ */
+function BarbellCard() {
+  const toast = useToast();
+  const bar = useLiveQuery(() => getSetting<number>('barWeightLbs', DEFAULT_BAR_LBS), []);
+  const plates = useLiveQuery(() => getSetting<number[]>('availablePlates', DEFAULT_PLATES), []);
+  const [draft, setDraft] = useState<string | null>(null);
+
+  async function savePlates(raw: string) {
+    const parsed = raw
+      .split(',')
+      .map((p) => Number(p.trim()))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    if (parsed.length === 0) {
+      toast('Enter at least one plate weight');
+      return;
+    }
+    await setSetting(
+      'availablePlates',
+      [...new Set(parsed)].sort((a, b) => b - a),
+    );
+    setDraft(null);
+  }
+
+  return (
+    <div className="card">
+      <strong>Barbell</strong>
+      <div className="row" style={{ marginTop: 8 }}>
+        <input
+          type="number"
+          inputMode="decimal"
+          aria-label="Default bar weight in pounds"
+          value={bar ?? DEFAULT_BAR_LBS}
+          onChange={(e) => {
+            const n = Number(e.target.value);
+            if (Number.isFinite(n) && n > 0) void setSetting('barWeightLbs', n);
+          }}
+        />
+        <span className="small">lb — the bar new barbell lifts assume</span>
+      </div>
+      <div className="row" style={{ marginTop: 12 }}>
+        <input
+          aria-label="Plate weights available"
+          value={draft ?? (plates ?? DEFAULT_PLATES).join(', ')}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={(e) => void savePlates(e.target.value)}
+        />
+      </div>
+      <p className="small">
+        The plates your gym actually has, heaviest first. Nothing is suggested that you can't
+        load — a weight the rack can't build is shown as the nearest one it can.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Whether the browser has promised to keep the data. Without persistence,
+ * IndexedDB is "best effort" — evictable under storage pressure with no warning
+ * and no recovery — which makes this the quiet foundation the whole app rests
+ * on, not a nicety.
+ */
+function DataSafetyCard() {
+  const [state, setState] = useState<PersistenceState | 'checking'>('checking');
+  const [usage, setUsage] = useState<number | undefined>(undefined);
+
+  const refresh = useCallback(async () => {
+    setState(await ensurePersisted(navigator.storage));
+    try {
+      setUsage((await navigator.storage?.estimate?.())?.usage);
+    } catch {
+      setUsage(undefined);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  return (
+    <div className="card">
+      <strong>Data safety</strong>
+      <p className="small">
+        {state === 'checking' && 'Checking…'}
+        {state === 'persisted' &&
+          `Protected — this browser won't evict your data to reclaim space. Using ${formatBytes(usage)}.`}
+        {state === 'denied' &&
+          'Not protected. The browser may clear this app’s data if the device runs low on space. Installing the app to your home screen usually earns protection.'}
+        {state === 'unsupported' &&
+          "This browser won't say whether your data is protected. Export regularly."}
+      </p>
+      {state === 'denied' && (
+        <button onClick={() => void refresh()}>Ask again</button>
+      )}
+      <p className="small">Either way, an exported backup is the only copy that survives this device.</p>
     </div>
   );
 }

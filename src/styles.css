@@ -232,6 +232,25 @@ textarea { width: 100%; min-height: 70px; margin: 10px 0; font-family: var(--ui)
 /* Divides your own exercises from the seeded library inside the picker. */
 .seed-head { margin-top: 16px; padding-top: 10px; border-top: 1px solid var(--hairline); }
 
+/* ---- Bar loading --------------------------------------------------- */
+
+/* Sits directly under the weight you're typing, quieter than the input. */
+.bar-load {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 2px 0 8px 2px;
+  font-family: var(--display);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.bar-load .light { color: var(--muted); font-family: var(--ui); font-size: 13px; }
+
+.warmup { margin-top: 8px; }
+.warmup-toggle { width: 100%; text-align: left; }
+
 /* ---- Supersets ----------------------------------------------------- */
 
 /* In the editor each exercise keeps its own card — targets need the room — so

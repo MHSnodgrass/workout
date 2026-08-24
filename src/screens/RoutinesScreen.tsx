@@ -2,8 +2,16 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type Exercise } from '../db/db';
-import { createRoutine, deleteExercise, deleteRoutine, updateExercise } from '../db/mutations';
+import {
+  createRoutine,
+  deleteExercise,
+  deleteRoutine,
+  setExerciseBar,
+  updateExercise,
+} from '../db/mutations';
+import { getSetting } from '../db/settings';
 import { MUSCLE_GROUPS } from '../lib/muscles';
+import { DEFAULT_BAR_LBS } from '../lib/plates';
 import ConfirmButton from '../components/ConfirmButton';
 import { useToast } from '../components/Toast';
 
@@ -126,7 +134,55 @@ function ExerciseLibRow({ exercise }: { exercise: Exercise }) {
           </>
         )}
       </div>
+      {exercise.type === 'weighted' && <BarSetting exercise={exercise} />}
       <MuscleTags exercise={exercise} />
+    </div>
+  );
+}
+
+/**
+ * Whether this lift loads onto a bar, and which bar. Absent is the default and
+ * means no plate breakdown — that is the honest answer for dumbbells, cables
+ * and machines, where a "per side" figure would be meaningless.
+ */
+function BarSetting({ exercise }: { exercise: Exercise }) {
+  const toast = useToast();
+  const defaultBar = useLiveQuery(() => getSetting<number>('barWeightLbs', DEFAULT_BAR_LBS), []);
+  const isBarbell = exercise.barLbs !== undefined;
+
+  async function save(barLbs: number | null) {
+    try {
+      await setExerciseBar(exercise.id!, barLbs);
+    } catch {
+      toast("Couldn't save bar weight");
+    }
+  }
+
+  return (
+    <div className="row small" style={{ marginTop: 8 }}>
+      <label className="row">
+        <input
+          type="checkbox"
+          checked={isBarbell}
+          onChange={(e) => void save(e.target.checked ? (defaultBar ?? DEFAULT_BAR_LBS) : null)}
+        />
+        <span>Barbell</span>
+      </label>
+      {isBarbell && (
+        <>
+          <input
+            type="number"
+            inputMode="decimal"
+            aria-label="Bar weight in pounds"
+            value={exercise.barLbs}
+            onChange={(e) => {
+              const n = Number(e.target.value);
+              if (Number.isFinite(n) && n > 0) void save(n);
+            }}
+          />
+          <span>lb bar — shows plates and a warm-up ramp</span>
+        </>
+      )}
     </div>
   );
 }

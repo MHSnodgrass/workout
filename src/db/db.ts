@@ -12,6 +12,12 @@ export interface Exercise {
   incrementLbs?: number;
   /** Values from MUSCLE_GROUPS in lib/muscles.ts. Untagged means uncounted. */
   muscleGroups?: string[];
+  /**
+   * The bar this loads onto. Present means "barbell lift" — which is what
+   * unlocks the plate breakdown and the warm-up ramp — and absent means there
+   * is no bar to break down. See lib/plates.ts.
+   */
+  barLbs?: number;
 }
 
 export interface Routine {

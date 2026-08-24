@@ -6,6 +6,7 @@ import { db } from '../db/db';
 import { getActiveSession, getLastFinishedSessionDate } from '../db/queries';
 import { startSession } from '../db/mutations';
 import { getSetting } from '../db/settings';
+import { backupNudge, sessionsSinceExport } from '../lib/backupHealth';
 import { formatDaysAgo } from '../lib/format';
 import { isScheduledToday, scheduleLabel } from '../lib/schedule';
 import BodyWeightInput from '../components/BodyWeightInput';
@@ -23,10 +24,18 @@ export default function HomeScreen() {
     );
     return new Map(entries);
   }, []);
-  const needsBackup = useLiveQuery(async () => {
-    if ((await db.sessions.count()) === 0) return false;
+  // Measured in sessions, not days: time since the last export nags after a
+  // month off, when nothing is at risk, and stays silent through a month of
+  // hard training. See lib/backupHealth.ts.
+  const backupWarning = useLiveQuery(async () => {
+    const finished = await db.sessions.toArray();
     const last = await getSetting<number | null>('lastExportAt', null);
-    return last === null || Date.now() - last > 30 * 24 * 3600 * 1000;
+    return backupNudge(
+      sessionsSinceExport(
+        finished.filter((s) => s.finishedAt !== null).map((s) => s.finishedAt!),
+        last,
+      ),
+    );
   }, []);
   const [nudgeDismissed, setNudgeDismissed] = useState(false);
 
@@ -49,9 +58,9 @@ export default function HomeScreen() {
   return (
     <div className="screen">
       <h1>Workout</h1>
-      {needsBackup && !nudgeDismissed && (
+      {backupWarning && !nudgeDismissed && (
         <div className="banner">
-          <span className="small">It's been a while since your last backup.</span>
+          <span className="small">{backupWarning}</span>
           <div className="row">
             <Link to="/settings"><button className="small">Export</button></Link>
             <button

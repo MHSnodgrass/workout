@@ -13,6 +13,7 @@ import {
   logSet,
   moveRoutineExercise,
   removeRoutineExercise,
+  setExerciseBar,
   startSession,
   unlinkSuperset,
 } from './mutations';
@@ -65,8 +66,23 @@ describe('createExercise', () => {
   });
 
   it('stores muscle groups when the library supplies them', async () => {
-    const id = await createExercise('Barbell Squat', 'weighted', 90, ['Quads', 'Glutes']);
-    expect((await db.exercises.get(id))?.muscleGroups).toEqual(['Quads', 'Glutes']);
+    const id = await createExercise('Barbell Squat', 'weighted', 90, {
+      muscleGroups: ['Quads', 'Glutes'],
+      barLbs: 45,
+    });
+    const saved = await db.exercises.get(id);
+    expect(saved?.muscleGroups).toEqual(['Quads', 'Glutes']);
+    expect(saved?.barLbs).toBe(45);
+  });
+
+  it('sets and clears the bar weight', async () => {
+    const id = await createExercise('Bench Press', 'weighted', 90);
+    await setExerciseBar(id, 45);
+    expect((await db.exercises.get(id))?.barLbs).toBe(45);
+    // Cleared means gone, not undefined-in-place: absent is what "not a
+    // barbell lift" looks like everywhere else.
+    await setExerciseBar(id, null);
+    expect('barLbs' in (await db.exercises.get(id))!).toBe(false);
   });
 
   it('leaves muscleGroups unset when none are given', async () => {

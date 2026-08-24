@@ -4,6 +4,7 @@ import {
   mapSeedMuscles,
   searchSeed,
   seedType,
+  usesBarbell,
   type SeedExercise,
 } from './seedLibrary';
 
@@ -70,6 +71,21 @@ describe('seedType', () => {
   it('calls everything else weighted', () => {
     expect(seedType(entry({ equipment: 'barbell' }))).toBe('weighted');
     expect(seedType(entry({ equipment: 'machine', force: '' }))).toBe('weighted');
+  });
+});
+
+describe('usesBarbell', () => {
+  it('recognises the two bars in the dataset', () => {
+    expect(usesBarbell(entry({ equipment: 'barbell' }))).toBe(true);
+    expect(usesBarbell(entry({ equipment: 'e-z curl bar' }))).toBe(true);
+  });
+
+  it('leaves everything else alone', () => {
+    // A plate breakdown on a dumbbell curl or a cable row is nonsense, so the
+    // bar weight stays unset and nothing is offered.
+    for (const equipment of ['dumbbell', 'cable', 'machine', 'body only', 'kettlebells', '']) {
+      expect(usesBarbell(entry({ equipment }))).toBe(false);
+    }
   });
 });
 

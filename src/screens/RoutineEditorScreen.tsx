@@ -19,7 +19,14 @@ import { getSetting } from '../db/settings';
 import { retryChunk } from '../lib/chunkRetry';
 import { targetLabel } from '../lib/format';
 import { WEEKDAYS, scheduleLabel } from '../lib/schedule';
-import { mapSeedMuscles, searchSeed, seedType, type SeedExercise } from '../lib/seedLibrary';
+import { DEFAULT_BAR_LBS } from '../lib/plates';
+import {
+  mapSeedMuscles,
+  searchSeed,
+  seedType,
+  usesBarbell,
+  type SeedExercise,
+} from '../lib/seedLibrary';
 import { groupBlocks } from '../lib/supersets';
 import ConfirmButton from '../components/ConfirmButton';
 import { useToast } from '../components/Toast';
@@ -328,11 +335,11 @@ function ExercisePicker({
   async function createAndAdd(
     name: string,
     type: ExerciseType,
-    muscleGroups?: string[],
+    extras: { muscleGroups?: string[]; barLbs?: number } = {},
   ): Promise<void> {
     if (!name.trim()) return;
     try {
-      const id = await createExercise(name, type, globalRest ?? 90, muscleGroups);
+      const id = await createExercise(name, type, globalRest ?? 90, extras);
       await addExerciseToRoutine(routineId, id);
       onDone();
     } catch (e) {
@@ -395,11 +402,16 @@ function SeedResults({
   onAdd,
 }: {
   query: string;
-  onAdd: (name: string, type: ExerciseType, muscleGroups?: string[]) => Promise<void>;
+  onAdd: (
+    name: string,
+    type: ExerciseType,
+    extras?: { muscleGroups?: string[]; barLbs?: number },
+  ) => Promise<void>;
 }) {
   const [library, setLibrary] = useState<SeedExercise[] | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [pickedType, setPickedType] = useState<ExerciseType>('weighted');
+  const barLbs = useLiveQuery(() => getSetting<number>('barWeightLbs', DEFAULT_BAR_LBS), []);
   // Excludes by name, matching what createExercise would reject, so the picker
   // never offers something that can only fail.
   const taken = useLiveQuery(async () => {
@@ -437,6 +449,7 @@ function SeedResults({
       {total === 0 && <p className="small">Nothing in the library matches — name it yourself.</p>}
       {results.map((e) => {
         const groups = mapSeedMuscles(e.primaryMuscles);
+        const bar = usesBarbell(e) ? (barLbs ?? DEFAULT_BAR_LBS) : undefined;
         const isOpen = expanded === e.name;
         return (
           <div key={e.name} style={{ marginTop: 8 }}>
@@ -444,7 +457,8 @@ function SeedResults({
               <span>
                 {e.name}{' '}
                 <span className="small">
-                  ({groups.length > 0 ? groups.join(' · ') : 'untagged'})
+                  ({groups.length > 0 ? groups.join(' · ') : 'untagged'}
+                  {bar !== undefined && ' · barbell'})
                 </span>
               </span>
               <button
@@ -473,7 +487,7 @@ function SeedResults({
                 </select>
                 <button
                   className="primary small"
-                  onClick={() => void onAdd(e.name, pickedType, groups)}
+                  onClick={() => void onAdd(e.name, pickedType, { muscleGroups: groups, barLbs: bar })}
                 >
                   Add {e.name}
                 </button>

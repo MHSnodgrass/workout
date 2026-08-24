@@ -78,6 +78,15 @@ export function seedType(entry: SeedExercise): ExerciseType {
 }
 
 /**
+ * Whether this loads onto a bar, and so has a plate breakdown worth showing.
+ * Only two of the dataset's twelve equipment names do — a plate breakdown on a
+ * dumbbell curl or a cable row would be nonsense.
+ */
+export function usesBarbell(entry: SeedExercise): boolean {
+  return entry.equipment === 'barbell' || entry.equipment === 'e-z curl bar';
+}
+
+/**
  * Three tiers, because a name match alone ranks badly here: searching "chest"
  * otherwise leads with medicine-ball drills called "Chest Push" while every
  * bench press sits below them.

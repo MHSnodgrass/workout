@@ -4,6 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { Dumbbell, ListChecks, Settings, TrendingUp } from 'lucide-react';
 import { getSetting } from './db/settings';
 import { retryChunk } from './lib/chunkRetry';
+import { ensurePersisted } from './lib/persistence';
 import { DEFAULT_ACCENT_ID, applyAccent, resolveAccent } from './lib/theme';
 import RouteErrorBoundary from './components/RouteErrorBoundary';
 import { ToastProvider } from './components/Toast';
@@ -28,6 +29,13 @@ export default function App() {
   useEffect(() => {
     applyAccent(resolveAccent(accentId), document.documentElement);
   }, [accentId]);
+
+  // Asks the browser not to evict the database. Silent on Chrome, where an
+  // installed PWA already meets the bar; the result is reported in Settings
+  // rather than here, because there is nothing useful to say mid-workout.
+  useEffect(() => {
+    void ensurePersisted(navigator.storage);
+  }, []);
 
   return (
     <HashRouter>

@@ -57,13 +57,14 @@ export async function createExercise(
   name: string,
   type: ExerciseType,
   defaultRestSeconds: number,
-  muscleGroups?: string[],
+  extras: { muscleGroups?: string[]; barLbs?: number } = {},
 ): Promise<number> {
   const trimmed = name.trim();
   const clash = await db.exercises
     .filter((e) => e.archived === 0 && e.name.toLowerCase() === trimmed.toLowerCase())
     .first();
   if (clash) throw new DuplicateExerciseNameError(trimmed);
+  const { muscleGroups, barLbs } = extras;
   return db.exercises.add({
     name: trimmed,
     type,
@@ -72,16 +73,33 @@ export async function createExercise(
     // Left off entirely when empty: untagged and tagged-with-nothing mean the
     // same thing to the coverage card, and storing [] only bloats backups.
     ...(muscleGroups && muscleGroups.length > 0 ? { muscleGroups } : {}),
+    ...(barLbs !== undefined ? { barLbs } : {}),
   });
 }
 
 export async function updateExercise(
   exerciseId: number,
   changes: Partial<
-    Pick<Exercise, 'name' | 'defaultRestSeconds' | 'incrementLbs' | 'muscleGroups'>
+    Pick<Exercise, 'name' | 'defaultRestSeconds' | 'incrementLbs' | 'muscleGroups' | 'barLbs'>
   >,
 ): Promise<void> {
   await db.exercises.update(exerciseId, changes);
+}
+
+/**
+ * Turning a lift into (or out of) a barbell lift. Clearing has to rewrite the
+ * row: Dexie's update() reads an undefined value as "leave it alone", so it
+ * cannot remove a key.
+ */
+export async function setExerciseBar(exerciseId: number, barLbs: number | null): Promise<void> {
+  if (barLbs !== null) {
+    await db.exercises.update(exerciseId, { barLbs });
+    return;
+  }
+  const row = await db.exercises.get(exerciseId);
+  if (!row) return;
+  delete row.barLbs;
+  await db.exercises.put(row);
 }
 
 export async function deleteExercise(exerciseId: number): Promise<'archived' | 'deleted'> {

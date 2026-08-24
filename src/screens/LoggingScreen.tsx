@@ -18,12 +18,15 @@ import {
 } from '../lib/format';
 import { MAX_RIR, parseRir } from '../lib/effort';
 import { DEFAULT_STALL_SESSIONS, suggestNext } from '../lib/progression';
+import { DEFAULT_PLATES } from '../lib/plates';
 import { blockRestSeconds, groupBlocks, roundCompleted, totalRounds } from '../lib/supersets';
 import { useRestAlert } from '../lib/useRestAlert';
 import { useWakeLock } from '../lib/useWakeLock';
+import BarLoad from '../components/BarLoad';
 import ConfirmButton from '../components/ConfirmButton';
 import RestTimerBar from '../components/RestTimerBar';
 import SetValue from '../components/SetValue';
+import WarmupRamp from '../components/WarmupRamp';
 import { useToast } from '../components/Toast';
 
 export default function LoggingScreen() {
@@ -124,6 +127,7 @@ function ActiveWorkout({ session }: { session: Session }) {
   );
   const restAlert = useLiveQuery(() => getSetting<boolean>('restAlert', false), []);
   useRestAlert(restEndsAt, restAlert === true);
+  const plates = useLiveQuery(() => getSetting<number[]>('availablePlates', DEFAULT_PLATES), []);
 
   function onSetLogged(restSeconds: number) {
     if (autoRest) setRestEndsAt(Date.now() + restSeconds * 1000);
@@ -159,6 +163,7 @@ function ActiveWorkout({ session }: { session: Session }) {
             defaultIncrementLbs={defaultIncrement ?? 5}
             stallSessions={stallSessions ?? DEFAULT_STALL_SESSIONS}
             trackRir={trackRir === true}
+            plates={plates ?? DEFAULT_PLATES}
             onRest={onSetLogged}
           />
         ))}
@@ -204,6 +209,7 @@ function WorkoutBlock({
   defaultIncrementLbs,
   stallSessions,
   trackRir,
+  plates,
   onRest,
 }: {
   session: Session;
@@ -211,6 +217,7 @@ function WorkoutBlock({
   defaultIncrementLbs: number;
   stallSessions: number;
   trackRir: boolean;
+  plates: number[];
   onRest: (restSeconds: number) => void;
 }) {
   const toast = useToast();
@@ -427,6 +434,20 @@ function WorkoutBlock({
     );
   }
 
+  /** The row plus, for a barbell lift, what goes on the bar for what you typed. */
+  function pendingBlock(memberIndex: number, i: number) {
+    const { exercise, rows } = state[memberIndex];
+    const bar = exercise.barLbs;
+    return (
+      <div key={`row-${exercise.id}-${i}`}>
+        {pendingRow(memberIndex, i)}
+        {bar !== undefined && (
+          <BarLoad weightLbs={Number(rows[i].weight)} barLbs={bar} plates={plates} />
+        )}
+      </div>
+    );
+  }
+
   function loggedLine(memberIndex: number, set: SetLog) {
     return (
       <div className="set-line" key={set.id}>
@@ -455,6 +476,14 @@ function WorkoutBlock({
           {s.suggestion.note}
         </div>
       )}
+      {/* Only before the first set: once you're warm, it's just clutter. */}
+      {s.exercise.barLbs !== undefined && s.loggedSets.length === 0 && (
+        <WarmupRamp
+          workingLbs={Number(s.rows[0]?.weight ?? s.suggestion?.weightLbs ?? 0)}
+          barLbs={s.exercise.barLbs}
+          plates={plates}
+        />
+      )}
     </div>
   ));
 
@@ -463,7 +492,7 @@ function WorkoutBlock({
       <div className="card">
         {headers}
         {state[0].loggedSets.map((set) => loggedLine(0, set))}
-        {state[0].rows.map((_, i) => pendingRow(0, i))}
+        {state[0].rows.map((_, i) => pendingBlock(0, i))}
         <button
           className="small"
           style={{ marginTop: 8 }}
@@ -501,7 +530,7 @@ function WorkoutBlock({
             const body = set
               ? loggedLine(i, set)
               : rowIndex >= 0 && rowIndex < s.rows.length
-                ? pendingRow(i, rowIndex)
+                ? pendingBlock(i, rowIndex)
                 : null;
             if (body === null) return null;
             return (
