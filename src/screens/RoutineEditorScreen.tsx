@@ -16,6 +16,7 @@ import {
   updateRoutineExercise,
 } from '../db/mutations';
 import { getSetting } from '../db/settings';
+import { retryChunk } from '../lib/chunkRetry';
 import { targetLabel } from '../lib/format';
 import { WEEKDAYS, scheduleLabel } from '../lib/schedule';
 import { mapSeedMuscles, searchSeed, seedType, type SeedExercise } from '../lib/seedLibrary';
@@ -408,7 +409,9 @@ function SeedResults({
 
   useEffect(() => {
     let alive = true;
-    void import('../data/seedExercises').then((m) => {
+    // Same exposure as the lazy routes: a deploy while the page was open
+    // deletes the chunk this build is asking for. See lib/chunkRetry.ts.
+    void retryChunk(() => import('../data/seedExercises')).then((m) => {
       if (alive) setLibrary(m.SEED_EXERCISES);
     });
     return () => {
