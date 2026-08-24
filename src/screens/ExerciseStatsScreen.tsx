@@ -26,6 +26,7 @@ import { DEFAULT_ACCENT_ID, resolveAccent } from '../lib/theme';
 import { deleteSession, deleteSet, updateSet } from '../db/mutations';
 import { formatDate, formatSet, formatShortDate, metricLabel, round1 } from '../lib/format';
 import ConfirmButton from '../components/ConfirmButton';
+import SetValue from '../components/SetValue';
 import { useToast } from '../components/Toast';
 
 export default function ExerciseStatsScreen() {
@@ -131,7 +132,7 @@ function HistoryList({ history, type }: { history: SessionSets[]; type: Exercise
   const newestFirst = [...history].reverse();
   return (
     <>
-      <h1>History</h1>
+      <h2 className="section">History</h2>
       {newestFirst.map(({ session, sets }) => (
         <div className="card" key={session.id}>
           <div className="row spread">
@@ -202,10 +203,10 @@ function SetHistoryRow({
 
   if (!editing) {
     return (
-      <div className="set-row">
-        <span style={{ flex: 1 }}>
-          Set {set.setNumber}: {formatSet(set, type)}
-        </span>
+      <div className="set-line">
+        <span className="set-index">{String(set.setNumber).padStart(2, '0')}</span>
+        <SetValue set={set} type={type} />
+        <span className="row">
         <button className="small" onClick={() => setEditing(true)}>Edit</button>
         <ConfirmButton
           labelText="Delete set"
@@ -217,6 +218,7 @@ function SetHistoryRow({
             }
           }}
         />
+        </span>
       </div>
     );
   }

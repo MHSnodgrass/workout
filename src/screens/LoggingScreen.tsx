@@ -21,6 +21,7 @@ import { DEFAULT_STALL_SESSIONS, suggestNext } from '../lib/progression';
 import { useWakeLock } from '../lib/useWakeLock';
 import ConfirmButton from '../components/ConfirmButton';
 import RestTimerBar from '../components/RestTimerBar';
+import SetValue from '../components/SetValue';
 import { useToast } from '../components/Toast';
 
 export default function LoggingScreen() {
@@ -61,9 +62,16 @@ function SessionSummary({ session }: { session: Session }) {
   return (
     <div className="screen">
       <h1>Workout complete</h1>
-      <p>
-        {setCount ?? 0} sets · {formatDuration(durationSec)}
-      </p>
+      <div className="card row spread">
+        <div>
+          <div className="stat">{setCount ?? 0}</div>
+          <div className="eyebrow">sets</div>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div className="stat">{formatDuration(durationSec)}</div>
+          <div className="eyebrow">on the clock</div>
+        </div>
+      </div>
       {prs && prs.length > 0 && (
         <div className="card pr-card">
           <strong className="row">
@@ -316,10 +324,9 @@ function ExerciseCard({
         <div className={`suggestion${suggestion.deload ? ' deload' : ''}`}>{suggestion.note}</div>
       )}
       {loggedSets.map((s) => (
-        <div className="set-row logged" key={s.id}>
-          <span style={{ flex: 1 }}>
-            Set {s.setNumber}: {formatSet(s, exercise.type)}
-          </span>
+        <div className="set-line" key={s.id}>
+          <span className="set-index">{String(s.setNumber).padStart(2, '0')}</span>
+          <SetValue set={s} type={exercise.type} />
           <ConfirmButton
             labelText="Delete set"
             onConfirm={async () => {

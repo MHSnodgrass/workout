@@ -38,7 +38,7 @@ export default function RoutinesScreen() {
       <div style={{ marginTop: 12 }}>
         {routines?.map((r) => (
           <div className="card row spread" key={r.id}>
-            <Link to={`/routines/${r.id}`}><strong>{r.name}</strong></Link>
+            <Link to={`/routines/${r.id}`} className="routine-name">{r.name}</Link>
             <ConfirmButton
               labelText="Delete routine"
               onConfirm={async () => {
@@ -54,7 +54,7 @@ export default function RoutinesScreen() {
         ))}
         {routines?.length === 0 && <p className="muted">No routines yet — add one above.</p>}
       </div>
-      <h1>Exercise library</h1>
+      <h2 className="section">Exercise library</h2>
       {exercises?.map((e) => <ExerciseLibRow key={e.id} exercise={e} />)}
       {exercises?.length === 0 && (
         <p className="muted">Exercises appear here once you add them to a routine.</p>

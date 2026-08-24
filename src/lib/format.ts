@@ -1,5 +1,4 @@
 import type { ExerciseType, RoutineExercise, SetLog } from '../db/db';
-import { formatRir } from './effort';
 import type { MetricKey } from './metrics';
 
 export function formatDate(ms: number): string {
@@ -52,12 +51,12 @@ export function metricLabel(metric: MetricKey): string {
   }
 }
 
+/**
+ * The flat text form, for sentences and accessible names. Effort is
+ * deliberately absent — components/SetValue gives RIR its own column, and
+ * repeating it here drowns the joined "Last: …" line.
+ */
 export function formatSet(set: SetLog, type: ExerciseType): string {
-  const effort = formatRir(set.rir);
-  return effort === '' ? setBody(set, type) : `${setBody(set, type)} · ${effort}`;
-}
-
-function setBody(set: SetLog, type: ExerciseType): string {
   if (type === 'timed') {
     const base = `${set.durationSeconds ?? 0}s`;
     return set.weightLbs !== undefined ? `${base} @ ${set.weightLbs} lb` : base;

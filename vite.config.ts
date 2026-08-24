@@ -10,6 +10,9 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['icon-192.png', 'icon-512.png'],
+      // Fonts are self-hosted and precached so the gym's dead cell signal
+      // can't leave the app rendering in a fallback face.
+      workbox: { globPatterns: ['**/*.{js,css,html,png,svg,woff2}'] },
       manifest: {
         name: 'Workout Tracker',
         short_name: 'Workout',

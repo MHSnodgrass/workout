@@ -1,87 +1,293 @@
+/**
+ * Barlow, self-hosted and precached — a gym with no signal shouldn't drop the
+ * app into a fallback face. Latin subsets only, ~22kB each.
+ * Barlow is SIL OFL 1.1; see public/fonts/OFL.txt.
+ */
+@font-face {
+  font-family: 'Barlow';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/workout/fonts/barlow-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Barlow';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/workout/fonts/barlow-600.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Barlow Condensed';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/workout/fonts/barlow-condensed-600.woff2') format('woff2');
+}
+
 :root {
   --bg: #111418;
-  --surface: #1c2128;
+  --surface: #171c22;
+  /* Inset wells: input fields, bar tracks, anything recessed. */
+  --sunken: #0d1014;
   --border: #2d333b;
-  --text: #e6edf3;
+  /* Quieter rule for ledger lines, which repeat far more often than borders. */
+  --hairline: #232a33;
+  --text: #e8eef5;
   --muted: #8b949e;
   --accent: #4f8ef7;
   /* Painted on top of --accent; travels with it, see lib/theme.ts */
   --accent-ink: #ffffff;
   --danger: #e5534b;
   --pr: #f5a623;
+
+  /* Everything pinned above the tab bar measures from this, so a device with
+     a gesture bar can't slide the rest timer underneath it. */
+  --tabbar-h: 58px;
+  --above-tabs: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
+
+  /* One superfamily, two widths. The width contrast carries the personality,
+     so numbers can be loud without a second typeface shouting alongside. */
+  --ui: 'Barlow', system-ui, -apple-system, sans-serif;
+  --display: 'Barlow Condensed', 'Barlow', system-ui, sans-serif;
 }
+
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--ui);
+  font-size: 15px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-input, select, textarea, button { accent-color: var(--accent); }
-* { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; }
+input, select, textarea, button { accent-color: var(--accent); font-family: var(--ui); }
+
 .app { display: flex; flex-direction: column; min-height: 100dvh; }
-.content { flex: 1; padding: 16px; padding-bottom: 76px; max-width: 640px; margin: 0 auto; width: 100%; }
-.tabbar { position: fixed; bottom: 0; left: 0; right: 0; display: flex; background: var(--surface); border-top: 1px solid var(--border); padding-bottom: env(safe-area-inset-bottom); z-index: 5; }
-.tabbar a { flex: 1; text-align: center; padding: 14px 0; color: var(--muted); text-decoration: none; font-size: 14px; }
-.tabbar a.active { color: var(--accent); font-weight: 600; }
-h1 { font-size: 22px; margin: 8px 0 16px; }
+.content { flex: 1; padding: 16px; padding-bottom: calc(var(--above-tabs) + 28px); max-width: 640px; margin: 0 auto; width: 100%; }
+
+/* ---- Type ---------------------------------------------------------- */
+
+h1 {
+  font-family: var(--display);
+  font-size: 31px;
+  font-weight: 600;
+  letter-spacing: 0.005em;
+  line-height: 1.1;
+  margin: 2px 0 16px;
+}
+
+/* Divides a screen into sections without pretending to be another page title. */
+h2.section {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.11em;
+  color: var(--muted);
+  margin: 24px 0 10px;
+}
+
+/* The quiet half of every label/number pair. */
+.eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--muted);
+}
+
 a { color: var(--accent); text-decoration: none; }
-.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-bottom: 12px; }
-button { background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-size: 15px; }
-button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-button.big { width: 100%; padding: 14px; font-size: 17px; margin-top: 8px; display: block; }
-button.danger { color: var(--danger); }
-button.small { padding: 4px 10px; font-size: 13px; }
-button:disabled { opacity: 0.5; }
-input, select, textarea { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 10px; font-size: 16px; }
-input[type='number'] { width: 76px; }
-input[type='checkbox'] { width: auto; }
-textarea { width: 100%; min-height: 70px; margin: 10px 0; }
-.row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.spread { justify-content: space-between; }
 .small { font-size: 13px; color: var(--muted); }
 .muted { color: var(--muted); }
-.set-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
-.set-row.logged { opacity: 0.75; }
-.set-row input[type='number'] { flex: 1; min-width: 0; width: 76px; }
-.row.small input[type='number'] { width: 60px; padding: 6px 8px; font-size: 14px; }
-/* Fixed, so adding effort tracking narrows only itself and not the reps field. */
-.set-row input.rir-input { flex: 0 0 56px; width: 56px; padding-left: 8px; padding-right: 4px; }
-.timer-btn { min-width: 58px; padding: 8px; font-variant-numeric: tabular-nums; display: inline-flex; align-items: center; justify-content: center; }
-.timer-btn.running { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-.last-time { color: var(--muted); font-size: 13px; margin: 4px 0 8px; }
-.suggestion { color: var(--accent); font-size: 13px; font-weight: 600; margin: 0 0 8px; }
-/* A retreat reads differently from an advance, so it doesn't wear the accent. */
-.suggestion.deload { color: var(--pr); }
-.swatches { gap: 10px; }
-.swatch { width: 40px; height: 40px; border-radius: 50%; border: 2px solid transparent; padding: 0; display: flex; align-items: center; justify-content: center; }
-.swatch.selected { border-color: var(--text); }
+strong { font-weight: 600; }
+
+/* ---- Numbers ------------------------------------------------------- */
+
+/**
+ * The app is a ledger of numbers, so the numbers are the typography. Condensed
+ * and tabular means a set reads at a glance mid-lift and columns line up down
+ * a card and across sessions.
+ */
+.value {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 22px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+}
+.value .unit,
+.value .rir {
+  font-family: var(--ui);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.value .op { color: var(--muted); padding: 0 1px; }
+.value .rir { margin-left: 7px; }
+.stat { font-family: var(--display); font-weight: 600; font-size: 26px; line-height: 1; font-variant-numeric: tabular-nums; }
+
+/* ---- Surfaces ------------------------------------------------------ */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 10px;
+}
+/* The primary action on the screen you open one-handed at the gym. */
+.card.big { width: 100%; padding: 18px 16px; display: block; text-align: left; }
+.routine-name { font-family: var(--display); font-size: 23px; font-weight: 600; line-height: 1.1; }
+
+/* ---- Controls ------------------------------------------------------ */
+
+button {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 14px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+button.big { width: 100%; padding: 15px; font-size: 17px; margin-top: 8px; display: block; }
+button.danger { color: var(--danger); }
+button.small { padding: 5px 10px; font-size: 13px; }
+button:disabled { opacity: 0.5; }
 button svg { display: block; }
 .icon-btn { display: inline-flex; align-items: center; justify-content: center; padding: 8px; }
 .icon-btn.small { padding: 6px; }
-.toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%); background: var(--danger); color: #fff; padding: 10px 18px; border-radius: 8px; z-index: 20; white-space: nowrap; }
-.rest-bar { position: fixed; bottom: 52px; left: 0; right: 0; display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: var(--surface); border-top: 1px solid var(--border); z-index: 10; }
+
+input, select, textarea {
+  background: var(--sunken);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+input[type='number'] { width: 76px; }
+input[type='checkbox'] { width: auto; }
+textarea { width: 100%; min-height: 70px; margin: 10px 0; font-family: var(--ui); }
+
+.row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.spread { justify-content: space-between; }
+
+/* ---- Set rows ------------------------------------------------------ */
+
+/* Pending: what you type is typeset like what you logged. */
+.set-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.set-row input[type='number'] { flex: 1; min-width: 0; width: 76px; font-family: var(--display); font-size: 20px; font-weight: 600; padding: 8px 10px; }
+.set-row input.rir-input { flex: 0 0 56px; width: 56px; padding-left: 8px; padding-right: 4px; }
+.row.small input[type='number'] { width: 60px; padding: 6px 8px; font-size: 14px; }
+
+/* Logged: a ruled ledger line, the thing you look at thirty times a workout. */
+.set-line {
+  display: grid;
+  grid-template-columns: 20px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-top: 1px solid var(--hairline);
+}
+.set-line .set-index { font-size: 11px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* Wider first column where the label is a date rather than a set number. */
+.set-line.wide-label { grid-template-columns: 54px 1fr auto; }
+
+.timer-btn { min-width: 58px; padding: 8px; font-family: var(--display); font-size: 17px; font-variant-numeric: tabular-nums; display: inline-flex; align-items: center; justify-content: center; }
+.timer-btn.running { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+
+.last-time { color: var(--muted); font-size: 13px; margin: 4px 0 8px; }
+.suggestion { color: var(--accent); font-size: 13px; font-weight: 600; margin: 0 0 10px; }
+/* A retreat reads differently from an advance, so it doesn't wear the accent. */
+.suggestion.deload { color: var(--pr); }
+
+/* ---- Chips and tags ------------------------------------------------ */
+
+.swatches { gap: 10px; }
+.swatch { width: 40px; height: 40px; border-radius: 50%; border: 2px solid transparent; padding: 0; display: flex; align-items: center; justify-content: center; }
+.swatch.selected { border-color: var(--text); }
+.day-chip { width: 38px; padding: 8px 0; text-align: center; font-family: var(--display); font-size: 16px; }
+.day-chip.selected { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.tag-row { gap: 6px; }
+.tag { font-size: 12px; padding: 4px 10px; border-radius: 999px; color: var(--muted); }
+.tag.selected { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.badge { background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 2px 10px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; }
+.card.big.scheduled { border-color: var(--accent); }
+
+/* ---- Tab bar ------------------------------------------------------- */
+
+.tabbar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  /* Declared, not measured — --tabbar-h is what everything else offsets by. */
+  height: var(--above-tabs);
+  background: var(--surface);
+  border-top: 1px solid var(--hairline);
+  padding-bottom: env(safe-area-inset-bottom);
+  z-index: 5;
+}
+.tabbar a {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 3px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+.tabbar a.active { color: var(--accent); box-shadow: inset 0 2px 0 var(--accent); }
+
+/* ---- Feedback ------------------------------------------------------ */
+
+.toast { position: fixed; bottom: calc(var(--above-tabs) + 42px); left: 50%; transform: translateX(-50%); background: var(--danger); color: #fff; padding: 10px 18px; border-radius: 8px; z-index: 20; white-space: nowrap; font-weight: 600; }
+.rest-bar { position: fixed; bottom: var(--above-tabs); left: 0; right: 0; display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: var(--surface); border-top: 1px solid var(--border); z-index: 10; }
 .rest-bar.done { background: var(--accent); color: var(--accent-ink); }
-.rest-time { flex: 1; font-size: 20px; font-variant-numeric: tabular-nums; font-weight: 600; }
+.rest-time { flex: 1; font-family: var(--display); font-size: 26px; font-variant-numeric: tabular-nums; font-weight: 600; line-height: 1; }
+.banner { background: var(--surface); border: 1px solid var(--pr); border-radius: 10px; padding: 12px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.pr-card { border-color: var(--pr); }
+.best-set { color: var(--muted); }
+
+/* ---- Heatmap ------------------------------------------------------- */
+
 .heatmap-scroll { overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
 .heatmap-scroll::-webkit-scrollbar { height: 6px; }
 .heatmap-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-.heatmap-months { display: grid; grid-template-columns: repeat(53, 14px); width: max-content; font-size: 10px; color: var(--muted); margin-bottom: 4px; }
+.heatmap-months { display: grid; grid-template-columns: repeat(53, 14px); width: max-content; font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-bottom: 5px; }
 .heatmap-months span { grid-row: 1; white-space: nowrap; }
 .heatmap { display: flex; gap: 3px; width: max-content; }
 .heatmap-week { display: flex; flex-direction: column; gap: 3px; }
-.heatmap-day { width: 11px; height: 11px; border-radius: 2px; background: var(--border); }
+.heatmap-day { width: 11px; height: 11px; border-radius: 2px; background: var(--sunken); }
 .heatmap-day.level-1 { background: var(--accent); opacity: 0.3; }
 .heatmap-day.level-2 { background: var(--accent); opacity: 0.5; }
 .heatmap-day.level-3 { background: var(--accent); opacity: 0.75; }
 .heatmap-day.level-4 { background: var(--accent); }
-.day-chip { width: 38px; padding: 8px 0; text-align: center; }
-.day-chip.selected { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
-.badge { background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 2px 10px; font-size: 12px; font-weight: 600; }
-.card.big.scheduled { border-color: var(--accent); }
-.tag-row { gap: 6px; }
-.tag { font-size: 12px; padding: 4px 10px; border-radius: 999px; color: var(--muted); }
-.tag.selected { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+
+/* ---- Coverage ------------------------------------------------------ */
+
 .coverage { display: flex; flex-direction: column; gap: 6px; }
 .coverage-row { display: grid; grid-template-columns: 84px 1fr 28px; align-items: center; gap: 8px; font-size: 13px; }
-.coverage-bar { background: var(--bg); border-radius: 3px; height: 10px; overflow: hidden; }
+.coverage-bar { background: var(--sunken); border-radius: 3px; height: 10px; overflow: hidden; }
 .coverage-bar span { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
-.coverage-count { text-align: right; font-variant-numeric: tabular-nums; }
-.best-set { color: var(--muted); }
-.pr-card { border-color: var(--pr); }
-.banner { background: var(--surface); border: 1px solid var(--pr); border-radius: 12px; padding: 12px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.coverage-count { text-align: right; font-family: var(--display); font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }

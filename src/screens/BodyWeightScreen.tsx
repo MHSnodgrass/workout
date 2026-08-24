@@ -96,10 +96,11 @@ export default function BodyWeightScreen() {
           </div>
           <div className="card">
             {latest && (
-              <div>
-                Latest: <strong>{round1(latest.weightLbs)} lb</strong>{' '}
-                <span className="small">
-                  ({AVERAGE_WINDOW_DAYS}-day avg {round1(latest.average)})
+              <div className="row" style={{ alignItems: 'baseline', gap: 6 }}>
+                <span className="stat">{round1(latest.weightLbs)}</span>
+                <span className="eyebrow">lb latest</span>
+                <span className="small" style={{ marginLeft: 'auto' }}>
+                  {AVERAGE_WINDOW_DAYS}-day avg {round1(latest.average)}
                 </span>
               </div>
             )}
@@ -151,12 +152,14 @@ function RecentList({ entries }: { entries: { id?: number; at: number; weightLbs
   const toast = useToast();
   return (
     <>
-      <h1>Recent</h1>
+      <h2 className="section">Recent</h2>
       <div className="card">
         {entries.map((w) => (
-          <div className="set-row" key={w.id}>
-            <span style={{ flex: 1 }}>
-              {formatDate(w.at)}: {round1(w.weightLbs)} lb
+          <div className="set-line wide-label" key={w.id}>
+            <span className="set-index">{formatDate(w.at)}</span>
+            <span className="value">
+              {round1(w.weightLbs)}
+              <span className="unit">lb</span>
             </span>
             <ConfirmButton
               labelText="Delete reading"

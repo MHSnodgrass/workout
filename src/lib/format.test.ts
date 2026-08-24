@@ -57,18 +57,11 @@ describe('formatSet', () => {
     expect(formatSet({ ...base, durationSeconds: 60, weightLbs: 50 }, 'timed')).toBe('60s @ 50 lb');
   });
 
-  it('appends recorded effort to every type', () => {
-    expect(formatSet({ ...base, weightLbs: 135, reps: 10, rir: 2 }, 'weighted')).toBe(
-      '135×10 · 2 RIR',
-    );
-    expect(formatSet({ ...base, reps: 12, rir: 0 }, 'bodyweight')).toBe('12 · 0 RIR');
-    expect(formatSet({ ...base, durationSeconds: 60, weightLbs: 50, rir: 1 }, 'timed')).toBe(
-      '60s @ 50 lb · 1 RIR',
-    );
-  });
-
-  it('says nothing when effort was not recorded', () => {
-    expect(formatSet({ ...base, weightLbs: 135, reps: 10 }, 'weighted')).toBe('135×10');
+  it('leaves effort out of the sentence form', () => {
+    // SetValue renders RIR as its own column. Repeating it here turned the
+    // joined "Last: …" line into 155×12 · 1 RIR, 155×12 · 0 RIR, … which is
+    // unreadable at a glance — the exact moment that line has to be read.
+    expect(formatSet({ ...base, weightLbs: 135, reps: 10, rir: 2 }, 'weighted')).toBe('135×10');
   });
 });
 

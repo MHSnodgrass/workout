@@ -7,8 +7,8 @@ mechanics, not code (AGPL — clean-room implementations only).
 
 Reviewed 2026-08-24. Ordered roughly by value-for-effort within each tier.
 
-**Status as of 2026-08-24** — shipped: #1–#9, #12, #13. Remaining: #10, #11,
-#14 (the deliberate-decision pile) and #15 (visual identity). Each item below
+**Status as of 2026-08-24** — shipped: #1–#9, #12, #13, #15. Remaining: #10,
+#11, #14 — the deliberate-decision pile, nothing more. Each item below
 is marked, with a note on what actually landed where it differs from the plan.
 
 ---
@@ -115,9 +115,10 @@ of progression math.
 - **Landed** as RIR only, not RPE — same information, and "2 left in the
   tank" needs no mental mapping. `src/lib/effort.ts` parses and labels it;
   0–10 accepted, whole numbers only. Setting key `trackRir`, default off.
-  `formatSet` appends `· 2 RIR`, so it shows up in the last-time line,
-  history and PR list at once — the separator is a middot rather than the
-  conventional `@` because a timed set already reads `60s @ 50 lb`.
+  It first appended to `formatSet` so it would appear everywhere at once;
+  **#15 reversed that** — effort now renders only as its own column in
+  `SetValue`, because in the joined "Last: …" line it read as
+  `155×12 · 1 RIR, 155×12 · 0 RIR, …` and buried the numbers that matter.
   **`suggestNext` deliberately does not read it**, per openGym's split.
 
 ---
@@ -236,9 +237,9 @@ openGym (having a server) pushes rest-alerts even when the app is closed.
 
 ## Not from openGym
 
-### 15. Visual identity pass — ☐ not started
-Added 2026-08-24. The app works but it reads as generic dark-Bootstrap —
-it looks like a starter template, not like a thing someone made.
+### 15. Visual identity pass — ✅ shipped
+Added and done 2026-08-24. The app worked but read as generic dark-Bootstrap
+— a starter template rather than a thing someone made.
 - **What's actually wrong**, concretely:
   - `system-ui` for everything. No display face, no character.
   - One card — `--surface`, 1px `--border`, 12px radius — repeated on every
@@ -250,11 +251,34 @@ it looks like a starter template, not like a thing someone made.
   - **The numbers are set in the same weight as their labels.** Weights,
     reps and PRs are the entire point of the app and they're typographically
     invisible.
-- **Where to start:** a real type scale and a tabular-figure treatment for
-  logged numbers would fix most of it before touching layout. The accent
-  system and `--accent-ink` already work — build on those, don't restart.
 - **Constraint:** this is a phone-first PWA used mid-set, in a gym, one
   handed. Legible and fast to hit beats clever.
+- **What landed.** The premise: this app is a *ledger of numbers*, so the
+  numbers are the typography.
+  - **Barlow + Barlow Condensed**, self-hosted (latin subset, ~22kB each,
+    `public/fonts/`, SIL OFL) and precached by the service worker, because a
+    gym with no signal shouldn't drop the app into a fallback face. One
+    superfamily at two widths — the *width* contrast carries the
+    personality, so no second typeface has to shout alongside.
+  - **`components/SetValue.tsx` is the signature.** A logged set is a ruled
+    ledger line — `01 · 155 lb × 12 · 1 RIR` — condensed and tabular so
+    columns align down a card and across sessions. Pending inputs use the
+    same face: what you type is typeset like what you logged.
+  - Type scale: 31px condensed screen titles, an uppercase `h2.section`
+    eyebrow for in-page sections (which were all `h1` before — three per
+    screen), `.eyebrow` for the quiet half of a label/number pair, `.stat`
+    for hero numbers.
+  - Tab bar gained icons, uppercase micro-labels and an accent rule on the
+    active tab. `--tabbar-h`/`--above-tabs` now drive everything pinned
+    above it, which also **fixed a real bug**: the rest timer would have
+    slid under the tab bar on any device with a gesture bar.
+  - Palette unchanged apart from a quieter `--hairline` for ledger rules and
+    a `--sunken` for inset wells. Deliberately no new hue: the accent is
+    user-owned, and a second brand color would fight all six.
+- **Reversed on sight:** `formatSet` no longer appends RIR. It looked right
+  in the abstract and turned the joined "Last: …" line into `155×12 · 1 RIR,
+  155×12 · 0 RIR, …` — unreadable exactly when it has to be read. Effort now
+  lives only in the ledger column.
 
 ---
 
@@ -274,12 +298,11 @@ it looks like a starter template, not like a thing someone made.
 
 ## What's left
 
-Every feature worth stealing has been stolen. What's left:
+Every feature worth stealing has been stolen, and the design pass is done.
+What's left is only the deliberate-decision pile:
 
-1. **#15 visual identity pass** — the only remaining item that isn't a
-   feature, and the one the app most visibly needs.
-2. **#10 seeded library**, **#11 supersets**, **#14 push notifications** —
-   the deliberate-decision pile, unchanged. #14 stays mostly obsoleted by #1.
+1. **#10 seeded library**, **#11 supersets**, **#14 push notifications** —
+   unchanged. #14 stays mostly obsoleted by #1.
 
 Smaller unbuilt pieces, noted where they belong: #8's routine-balance
 preview and body figures, #13's prompt-at-session-start, and deloads for
@@ -299,3 +322,9 @@ bodyweight work.
   `weekdays` and `muscleGroups` were added without a bump: old builds store
   and ignore unknown fields, so nothing is lost either direction, and every
   bump makes a stale cached build refuse a file it could actually read.
+- Type is token-driven: `--ui` (Barlow) for text, `--display` (Barlow
+  Condensed) for titles and every number. Numbers get `tabular-nums` so
+  columns align; use `components/SetValue.tsx` for a logged set rather than
+  printing `formatSet` into a div.
+- Anything pinned above the tab bar offsets by `--above-tabs`, never a
+  hardcoded pixel value — that's what keeps it clear of a gesture bar.

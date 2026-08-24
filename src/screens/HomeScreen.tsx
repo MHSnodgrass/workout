@@ -82,7 +82,7 @@ export default function HomeScreen() {
             onClick={() => start(r.id!)}
           >
             <span className="row spread">
-              <strong>{r.name}</strong>
+              <span className="routine-name">{r.name}</span>
               {today && <span className="badge">Today</span>}
             </span>
             <div className="small">

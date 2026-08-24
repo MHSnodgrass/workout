@@ -1,6 +1,7 @@
 import { Suspense, lazy, useEffect } from 'react';
 import { HashRouter, NavLink, Route, Routes } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { Dumbbell, ListChecks, Settings, TrendingUp } from 'lucide-react';
 import { getSetting } from './db/settings';
 import { DEFAULT_ACCENT_ID, applyAccent, resolveAccent } from './lib/theme';
 import { ToastProvider } from './components/Toast';
@@ -42,10 +43,10 @@ export default function App() {
             </Suspense>
           </main>
           <nav className="tabbar">
-            <NavLink to="/" end>Home</NavLink>
-            <NavLink to="/routines">Routines</NavLink>
-            <NavLink to="/stats">Stats</NavLink>
-            <NavLink to="/settings">Settings</NavLink>
+            <NavLink to="/" end><Dumbbell size={20} /><span>Train</span></NavLink>
+            <NavLink to="/routines"><ListChecks size={20} /><span>Routines</span></NavLink>
+            <NavLink to="/stats"><TrendingUp size={20} /><span>Stats</span></NavLink>
+            <NavLink to="/settings"><Settings size={20} /><span>Settings</span></NavLink>
           </nav>
         </div>
       </ToastProvider>
