@@ -6,6 +6,7 @@ import { getLastTime } from '../db/queries';
 import { deleteSet, finishSession, logSet } from '../db/mutations';
 import { formatDate, formatSet, targetLabel } from '../lib/format';
 import ConfirmButton from '../components/ConfirmButton';
+import RestTimerBar from '../components/RestTimerBar';
 import { useToast } from '../components/Toast';
 
 export default function LoggingScreen() {
@@ -31,8 +32,11 @@ function ActiveWorkout({ session }: { session: Session }) {
       .filter((x): x is { re: RoutineExercise; exercise: Exercise } => x.exercise !== undefined);
   }, [session.routineId]);
 
-  function onSetLogged(_restSeconds: number) {
-    // Rest timer wiring arrives in the next task.
+  const [autoRest, setAutoRest] = useState(true);
+  const [restEndsAt, setRestEndsAt] = useState<number | null>(null);
+
+  function onSetLogged(restSeconds: number) {
+    if (autoRest) setRestEndsAt(Date.now() + restSeconds * 1000);
   }
 
   async function finish() {
@@ -46,7 +50,17 @@ function ActiveWorkout({ session }: { session: Session }) {
 
   return (
     <div className="screen">
-      <h1>Workout</h1>
+      <header className="row spread">
+        <h1>Workout</h1>
+        <label className="row small">
+          <input
+            type="checkbox"
+            checked={autoRest}
+            onChange={(e) => setAutoRest(e.target.checked)}
+          />
+          Auto rest timer
+        </label>
+      </header>
       {items?.map(({ re, exercise }) => (
         <ExerciseCard
           key={re.id}
@@ -57,6 +71,13 @@ function ActiveWorkout({ session }: { session: Session }) {
         />
       ))}
       <button className="primary big" onClick={finish}>Finish workout</button>
+      {restEndsAt !== null && (
+        <RestTimerBar
+          endsAt={restEndsAt}
+          onAdd30={() => setRestEndsAt((t) => (t ?? Date.now()) + 30_000)}
+          onDismiss={() => setRestEndsAt(null)}
+        />
+      )}
     </div>
   );
 }
