@@ -23,6 +23,15 @@ export function formatDuration(totalSeconds: number): string {
   return `${m}m ${s}s`;
 }
 
+export function elapsedSeconds(startedAt: number, now: number): number {
+  return Math.max(0, Math.floor((now - startedAt) / 1000));
+}
+
+export function formatClock(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
 export function round1(n: number): number {
   return Math.round(n * 10) / 10;
 }

@@ -67,7 +67,7 @@ export async function createExercise(
 
 export async function updateExercise(
   exerciseId: number,
-  changes: Partial<Pick<Exercise, 'name' | 'defaultRestSeconds'>>,
+  changes: Partial<Pick<Exercise, 'name' | 'defaultRestSeconds' | 'incrementLbs'>>,
 ): Promise<void> {
   await db.exercises.update(exerciseId, changes);
 }

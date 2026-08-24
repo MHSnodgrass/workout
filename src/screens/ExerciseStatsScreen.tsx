@@ -118,6 +118,7 @@ function HistoryList({ history, type }: { history: SessionSets[]; type: Exercise
           <div className="row spread">
             <strong>{formatDate(session.startedAt)}</strong>
             <ConfirmButton
+              labelText="Delete session"
               confirmLabel="Delete session?"
               onConfirm={async () => {
                 try {
@@ -173,6 +174,7 @@ function SetHistoryRow({ set, type }: { set: SetLog; type: ExerciseType }) {
         </span>
         <button className="small" onClick={() => setEditing(true)}>Edit</button>
         <ConfirmButton
+          labelText="Delete set"
           onConfirm={async () => {
             try {
               await deleteSet(set.id!);

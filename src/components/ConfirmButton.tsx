@@ -1,15 +1,20 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Trash2 } from 'lucide-react';
 
 export default function ConfirmButton({
-  label = '✕',
+  label = <Trash2 size={16} />,
+  // Stays words on purpose: the armed state is a question, and an icon can't ask one.
   confirmLabel = 'Sure?',
   onConfirm,
-  className = 'danger small',
+  className = 'danger small icon-btn',
+  labelText = 'Delete',
 }: {
-  label?: string;
-  confirmLabel?: string;
+  label?: ReactNode;
+  confirmLabel?: ReactNode;
   onConfirm: () => void;
   className?: string;
+  /** Accessible name — the icon alone leaves the button unnamed. */
+  labelText?: string;
 }) {
   const [armed, setArmed] = useState(false);
   const timer = useRef<number | undefined>(undefined);
@@ -26,7 +31,11 @@ export default function ConfirmButton({
   }
 
   return (
-    <button className={className} onClick={click}>
+    <button
+      className={className}
+      onClick={click}
+      aria-label={armed ? `Confirm ${labelText.toLowerCase()}` : labelText}
+    >
       {armed ? confirmLabel : label}
     </button>
   );

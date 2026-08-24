@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { X } from 'lucide-react';
 import { db } from '../db/db';
 import { getActiveSession, getLastFinishedSessionDate } from '../db/queries';
 import { startSession } from '../db/mutations';
@@ -44,7 +45,13 @@ export default function HomeScreen() {
           <span className="small">It's been a while since your last backup.</span>
           <div className="row">
             <Link to="/settings"><button className="small">Export</button></Link>
-            <button className="small" onClick={() => setNudgeDismissed(true)}>✕</button>
+            <button
+              className="small icon-btn"
+              aria-label="Dismiss backup reminder"
+              onClick={() => setNudgeDismissed(true)}
+            >
+              <X size={16} />
+            </button>
           </div>
         </div>
       )}

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { ChevronDown, ChevronUp, Pencil } from 'lucide-react';
 import { db, type Exercise, type ExerciseType, type RoutineExercise } from '../db/db';
 import {
   DuplicateExerciseNameError,
@@ -99,10 +100,32 @@ function RoutineExerciseRow({
       <div className="row spread">
         <strong>{exercise.name}</strong>
         <div className="row">
-          <button className="small" disabled={isFirst} onClick={() => move(-1)}>▲</button>
-          <button className="small" disabled={isLast} onClick={() => move(1)}>▼</button>
-          <button className="small" onClick={() => setEditing((v) => !v)}>Edit</button>
+          <button
+            className="small icon-btn"
+            aria-label="Move up"
+            disabled={isFirst}
+            onClick={() => move(-1)}
+          >
+            <ChevronUp size={16} />
+          </button>
+          <button
+            className="small icon-btn"
+            aria-label="Move down"
+            disabled={isLast}
+            onClick={() => move(1)}
+          >
+            <ChevronDown size={16} />
+          </button>
+          <button
+            className="small icon-btn"
+            aria-label="Edit targets"
+            aria-pressed={editing}
+            onClick={() => setEditing((v) => !v)}
+          >
+            <Pencil size={16} />
+          </button>
           <ConfirmButton
+            labelText="Remove exercise"
             onConfirm={async () => {
               try {
                 await removeRoutineExercise(re.id!);

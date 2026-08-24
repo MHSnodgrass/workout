@@ -1,14 +1,19 @@
 import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { Check } from 'lucide-react';
 import { buildBackup, importBackup, validateBackup, type BackupFile } from '../db/backup';
 import { getSetting, setSetting } from '../db/settings';
 import { formatDate } from '../lib/format';
+import { ACCENTS, DEFAULT_ACCENT_ID } from '../lib/theme';
 import { useToast } from '../components/Toast';
 
 export default function SettingsScreen() {
   const toast = useToast();
   const globalRest = useLiveQuery(() => getSetting<number>('globalRestSeconds', 90), []);
   const lastExportAt = useLiveQuery(() => getSetting<number | null>('lastExportAt', null), []);
+  const keepAwake = useLiveQuery(() => getSetting<boolean>('keepAwake', true), []);
+  const defaultIncrement = useLiveQuery(() => getSetting<number>('defaultIncrementLbs', 5), []);
+  const accentId = useLiveQuery(() => getSetting<string>('accent', DEFAULT_ACCENT_ID), []);
   const [pendingImport, setPendingImport] = useState<BackupFile | null>(null);
 
   async function doExport() {
@@ -85,6 +90,37 @@ export default function SettingsScreen() {
         )}
       </div>
       <div className="card">
+        <strong>Accent color</strong>
+        <div className="row swatches" style={{ marginTop: 10 }}>
+          {ACCENTS.map((a) => (
+            <button
+              key={a.id}
+              className={`swatch${(accentId ?? DEFAULT_ACCENT_ID) === a.id ? ' selected' : ''}`}
+              style={{ background: a.value, color: a.ink }}
+              aria-label={a.label}
+              aria-pressed={(accentId ?? DEFAULT_ACCENT_ID) === a.id}
+              onClick={() => void setSetting('accent', a.id)}
+            >
+              {(accentId ?? DEFAULT_ACCENT_ID) === a.id && <Check size={18} strokeWidth={3} />}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="card">
+        <strong>During workouts</strong>
+        <label className="row" style={{ marginTop: 8 }}>
+          <input
+            type="checkbox"
+            checked={keepAwake ?? true}
+            onChange={(e) => void setSetting('keepAwake', e.target.checked)}
+          />
+          <span>Keep screen awake</span>
+        </label>
+        <p className="small">
+          Stops the phone locking between sets. Ignored on browsers without the Wake Lock API.
+        </p>
+      </div>
+      <div className="card">
         <strong>Rest timer default</strong>
         <div className="row" style={{ marginTop: 8 }}>
           <input
@@ -97,6 +133,22 @@ export default function SettingsScreen() {
           />
           <span className="small">seconds (default for new exercises)</span>
         </div>
+      </div>
+      <div className="card">
+        <strong>Progression</strong>
+        <div className="row" style={{ marginTop: 8 }}>
+          <input
+            type="number"
+            inputMode="decimal"
+            value={defaultIncrement ?? 5}
+            onChange={(e) => {
+              const n = Number(e.target.value);
+              if (Number.isFinite(n) && n > 0) void setSetting('defaultIncrementLbs', n);
+            }}
+          />
+          <span className="small">lb added when you top out a rep range</span>
+        </div>
+        <p className="small">Override per exercise in the Routines tab.</p>
       </div>
     </div>
   );

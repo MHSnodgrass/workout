@@ -1,5 +1,44 @@
 import { describe, expect, it } from 'vitest';
-import { formatDuration, formatSet, round1, targetLabel } from './format';
+import {
+  elapsedSeconds,
+  formatClock,
+  formatDuration,
+  formatSet,
+  round1,
+  targetLabel,
+} from './format';
+
+describe('elapsedSeconds', () => {
+  it('counts whole seconds since the start', () => {
+    expect(elapsedSeconds(1000, 1000)).toBe(0);
+    expect(elapsedSeconds(1000, 24_600)).toBe(23);
+  });
+
+  it('floors, so the logged value matches the running display', () => {
+    expect(elapsedSeconds(0, 23_999)).toBe(23);
+  });
+
+  it('never goes negative if the clock jumps backwards', () => {
+    expect(elapsedSeconds(5000, 1000)).toBe(0);
+  });
+});
+
+describe('formatClock', () => {
+  it('formats seconds as M:SS', () => {
+    expect(formatClock(0)).toBe('0:00');
+    expect(formatClock(9)).toBe('0:09');
+    expect(formatClock(60)).toBe('1:00');
+    expect(formatClock(125)).toBe('2:05');
+  });
+
+  it('does not wrap past an hour', () => {
+    expect(formatClock(3725)).toBe('62:05');
+  });
+
+  it('clamps negatives to zero', () => {
+    expect(formatClock(-5)).toBe('0:00');
+  });
+});
 
 describe('formatDuration', () => {
   it('formats minutes and hours', () => {

@@ -8,6 +8,8 @@ export interface Exercise {
   type: ExerciseType;
   defaultRestSeconds: number;
   archived: 0 | 1;
+  /** Weight step for progression suggestions; falls back to the global default. */
+  incrementLbs?: number;
 }
 
 export interface Routine {
