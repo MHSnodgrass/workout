@@ -418,6 +418,11 @@ None of these is blocked; none is obviously worth doing yet.
   reviewable. Anything that size is imported dynamically so it can't land in
   the chunk you wait on at the gym — check the build output, not the import
   graph.
+- **Every dynamic `import()` goes through `retryChunk`.** The service worker
+  precaches hashed chunks, so a page left open across a deploy asks for a file
+  that no longer exists on the server. Unwrapped, that 404 unmounts the whole
+  app — blank screen, no tab bar. `RouteErrorBoundary` sits inside the layout
+  as the backstop and is keyed on the route so a failure can't outlive it.
 - Browser APIs get a plain-TS controller with injected dependencies
   (`wakeLock.ts`, `restAlert.ts`) plus a thin hook, so the awkward part —
   re-acquiring on visibility change, scheduling against a throttled timer —
