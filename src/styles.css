@@ -193,6 +193,22 @@ textarea { width: 100%; min-height: 70px; margin: 10px 0; font-family: var(--ui)
 .set-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
 .set-row input[type='number'] { flex: 1; min-width: 0; width: 76px; font-family: var(--display); font-size: 20px; font-weight: 600; padding: 8px 10px; }
 .set-row input.rir-input { flex: 0 0 56px; width: 56px; padding-left: 8px; padding-right: 4px; }
+
+/* The sign toggle. The phone keypad has no minus key, so assistance needs a
+   button of its own; it sits square and quiet until it is holding a minus,
+   which is the state worth noticing. See lib/assist.ts. */
+.set-row .sign-btn {
+  flex: 0 0 38px;
+  width: 38px;
+  padding: 8px 0;
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1;
+  text-align: center;
+  color: var(--muted);
+}
+.set-row .sign-btn.assist { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
 .row.small input[type='number'] { width: 60px; padding: 6px 8px; font-size: 14px; }
 
 /* Logged: a ruled ledger line, the thing you look at thirty times a workout. */

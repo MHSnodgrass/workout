@@ -17,6 +17,7 @@ import {
   targetLabel,
 } from '../lib/format';
 import { MAX_RIR, parseRir } from '../lib/effort';
+import { acceptLoadInput, parseLoad, splitSign, type Sign } from '../lib/assist';
 import { DEFAULT_STALL_SESSIONS, suggestNext } from '../lib/progression';
 import { DEFAULT_PLATES } from '../lib/plates';
 import { blockRestSeconds, groupBlocks, roundCompleted, totalRounds } from '../lib/supersets';
@@ -180,13 +181,24 @@ function ActiveWorkout({ session }: { session: Session }) {
 }
 
 interface PendingRow {
+  /** Magnitude only — the sign lives on `sign`. See lib/assist.ts. */
   weight: string;
+  /** Added weight, or assistance taken off. Bodyweight exercises only. */
+  sign: Sign;
   amount: string; // reps, or seconds for timed exercises
   rir: string;
   // Timed exercises only: wall-clock start of the in-set work timer. Stored as
   // a timestamp rather than an accumulated count so backgrounding the app (or
   // any missed tick) can't lose time.
   runningSince?: number;
+}
+
+/**
+ * An empty set, carrying forward whichever way the sign toggle was already
+ * pointing — you don't come off the assist machine halfway through an exercise.
+ */
+function blankRow(rows: PendingRow[]): PendingRow {
+  return { weight: '', sign: rows[rows.length - 1]?.sign ?? 1, amount: '', rir: '' };
 }
 
 interface Member {
@@ -263,15 +275,14 @@ function WorkoutBlock({
     const loggedSets = logged[i];
     const rows: PendingRow[] =
       pending[member.exercise.id!] ??
-      Array.from({ length: Math.max(member.re.targetSets - loggedSets.length, 0) }, (_, r) => ({
+      Array.from({ length: Math.max(member.re.targetSets - loggedSets.length, 0) }, (_, r) => {
         // The suggested load applies to every set; fall back to what was
         // actually done set-for-set when there's nothing to suggest.
-        weight: String(
-          suggestion?.weightLbs ?? lastTime?.sets[loggedSets.length + r]?.weightLbs ?? '',
-        ),
-        amount: '',
-        rir: '',
-      }));
+        const { sign, magnitude } = splitSign(
+          suggestion?.weightLbs ?? lastTime?.sets[loggedSets.length + r]?.weightLbs,
+        );
+        return { weight: magnitude, sign, amount: '', rir: '' };
+      });
     return { ...member, lastTime, suggestion, loggedSets, rows };
   });
 
@@ -302,7 +313,7 @@ function WorkoutBlock({
   async function logRow(memberIndex: number, i: number) {
     const { exercise, loggedSets, rows } = state[memberIndex];
     const row = rows[i];
-    const weight = row.weight.trim() === '' ? undefined : Number(row.weight);
+    const load = parseLoad(row.weight, row.sign, exercise.type);
     // Logging a still-running set stops the timer and uses its value, so the
     // user doesn't have to stop and then confirm.
     const amount =
@@ -313,12 +324,8 @@ function WorkoutBlock({
       toast(exercise.type === 'timed' ? 'Enter seconds' : 'Enter reps');
       return;
     }
-    if (weight !== undefined && !Number.isFinite(weight)) {
-      toast('Weight must be a number');
-      return;
-    }
-    if (exercise.type === 'weighted' && weight === undefined) {
-      toast('Enter a weight');
+    if (!load.ok) {
+      toast(load.error);
       return;
     }
     const effort = parseRir(row.rir);
@@ -331,7 +338,7 @@ function WorkoutBlock({
         sessionId: session.id!,
         exerciseId: exercise.id!,
         setNumber: loggedSets.length + 1,
-        weightLbs: weight,
+        weightLbs: load.value,
         reps: exercise.type === 'timed' ? undefined : amount,
         durationSeconds: exercise.type === 'timed' ? amount : undefined,
         rir: effort.value,
@@ -366,12 +373,25 @@ function WorkoutBlock({
     const row = rows[i];
     return (
       <div className="set-row" key={`pending-${exercise.id}-${i}`}>
+        {exercise.type === 'bodyweight' && (
+          <button
+            className={`small sign-btn${row.sign === -1 ? ' assist' : ''}`}
+            aria-label={row.sign === -1 ? 'Assisted — switch to added weight' : 'Added weight — switch to assisted'}
+            aria-pressed={row.sign === -1}
+            onClick={() => updateRow(memberIndex, i, { sign: (-row.sign) as Sign })}
+          >
+            {row.sign === -1 ? '−' : '+'}
+          </button>
+        )}
         <input
           type="number"
           inputMode="decimal"
           placeholder="lb"
           value={row.weight}
-          onChange={(e) => updateRow(memberIndex, i, { weight: e.target.value })}
+          onChange={(e) => {
+            const { magnitude, sign } = acceptLoadInput(e.target.value, row.sign, exercise.type);
+            updateRow(memberIndex, i, { weight: magnitude, sign });
+          }}
         />
         <input
           type="number"
@@ -496,7 +516,7 @@ function WorkoutBlock({
         <button
           className="small"
           style={{ marginTop: 8 }}
-          onClick={() => setRows(0, [...state[0].rows, { weight: '', amount: '', rir: '' }])}
+          onClick={() => setRows(0, [...state[0].rows, blankRow(state[0].rows)])}
         >
           + Add set
         </button>
@@ -551,7 +571,7 @@ function WorkoutBlock({
           setPending((p) => {
             const next = { ...p };
             state.forEach((s) => {
-              next[s.exercise.id!] = [...s.rows, { weight: '', amount: '', rir: '' }];
+              next[s.exercise.id!] = [...s.rows, blankRow(s.rows)];
             });
             return next;
           })

@@ -1,6 +1,6 @@
 import type { Exercise, RoutineExercise, SetLog } from '../db/db';
 import type { SessionSets } from '../db/queries';
-import { round1 } from './format';
+import { loadLabel, round1 } from './format';
 
 /**
  * Double progression: work up the rep range at a fixed load, then add weight
@@ -46,7 +46,7 @@ export function suggestNext(
     case 'weighted':
       return weightedSuggestion(sets, re, incrementLbs, history, stallSessions);
     case 'bodyweight':
-      return bodyweightSuggestion(sets, re);
+      return bodyweightSuggestion(sets, re, incrementLbs, history, stallSessions);
     case 'timed':
       return timedSuggestion(sets, re);
   }
@@ -79,11 +79,14 @@ function weightedSuggestion(
   const working = Math.min(...(weights as number[]));
 
   if (sets.every((s) => (s.reps ?? 0) >= ceiling)) {
-    const next = round1(working + incrementLbs);
+    const stepped = round1(working + incrementLbs);
+    // Assistance runs out at zero — a bodyweight rep — rather than turning into
+    // added weight the moment the increment overshoots.
+    const next = working < 0 && stepped > 0 ? 0 : stepped;
     return {
       weightLbs: next,
       reps: re.targetRepsMin,
-      note: `Try ${next} lb — you hit ${re.targetSets}×${ceiling} last time`,
+      note: `Try ${loadLabel(next)} — you hit ${re.targetSets}×${ceiling} last time`,
     };
   }
 
@@ -95,7 +98,7 @@ function weightedSuggestion(
         weightLbs: lighter,
         reps: re.targetRepsMin,
         deload: true,
-        note: `Deload to ${lighter} lb — ${stuck} sessions stuck at ${round1(working)} lb`,
+        note: `Deload to ${loadLabel(lighter)} — ${stuck} sessions stuck at ${loadLabel(working)}`,
       };
     }
     // Nothing lighter to drop to, so fall through and hold.
@@ -104,7 +107,7 @@ function weightedSuggestion(
   return {
     weightLbs: round1(working),
     reps: ceiling,
-    note: `Stay at ${round1(working)} lb — aim for ${re.targetSets}×${ceiling}`,
+    note: `Stay at ${loadLabel(working)} — aim for ${re.targetSets}×${ceiling}`,
   };
 }
 
@@ -136,14 +139,37 @@ function stallStreak(history: SessionSets[], re: RoutineExercise, working: numbe
  * current weight — better to hold than to suggest the same number.
  */
 function deloadTo(working: number, incrementLbs: number): number | null {
+  // Under assistance, easier means *more* help, so a percentage of the load
+  // would move the wrong way. One pin back is the retreat, and there is always
+  // one available.
+  if (working < 0) return round1(working - incrementLbs);
   const snapped = Math.round((working * 0.9) / incrementLbs) * incrementLbs;
   const next = snapped >= working ? working - incrementLbs : snapped;
   return next > 0 ? round1(next) : null;
 }
 
-function bodyweightSuggestion(sets: SetLog[], re: RoutineExercise): Suggestion | null {
+function bodyweightSuggestion(
+  sets: SetLog[],
+  re: RoutineExercise,
+  incrementLbs: number,
+  history: SessionSets[],
+  stallSessions: number,
+): Suggestion | null {
   const ceiling = re.targetRepsMax;
   if (ceiling === undefined) return null;
+
+  // Assisted work is the weighted rule run toward zero: top the rep range and
+  // the next session takes assistance off, exactly as it would add weight. See
+  // lib/assist.ts for why a negative load means assistance.
+  if (sets.some((s) => (s.weightLbs ?? 0) < 0)) {
+    return weightedSuggestion(
+      grounded(sets),
+      re,
+      incrementLbs,
+      history.map((h) => ({ ...h, sets: grounded(h.sets) })),
+      stallSessions,
+    );
+  }
 
   if (sets.every((s) => (s.reps ?? 0) >= ceiling)) {
     return {
@@ -153,6 +179,16 @@ function bodyweightSuggestion(sets: SetLog[], re: RoutineExercise): Suggestion |
     };
   }
   return { reps: ceiling, note: `Aim for ${re.targetSets}×${ceiling}` };
+}
+
+/**
+ * An unweighted set on a bodyweight exercise is a set done at bodyweight — a
+ * real load of zero, not a missing number. Saying so lets a session that
+ * dropped the assist partway through still progress, where the weighted rule
+ * would have read the gap as bad data and suggested nothing.
+ */
+function grounded(sets: SetLog[]): SetLog[] {
+  return sets.map((s) => (s.weightLbs === undefined ? { ...s, weightLbs: 0 } : s));
 }
 
 function timedSuggestion(sets: SetLog[], re: RoutineExercise): Suggestion | null {

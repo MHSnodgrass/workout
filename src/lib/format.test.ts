@@ -4,6 +4,7 @@ import {
   formatClock,
   formatDuration,
   formatSet,
+  loadLabel,
   round1,
   targetLabel,
 } from './format';
@@ -57,6 +58,14 @@ describe('formatSet', () => {
     expect(formatSet({ ...base, durationSeconds: 60, weightLbs: 50 }, 'timed')).toBe('60s @ 50 lb');
   });
 
+  it('writes assistance as a minus, mirroring added weight', () => {
+    expect(formatSet({ ...base, weightLbs: -40, reps: 6 }, 'bodyweight')).toBe('−40×6');
+  });
+
+  it('writes a zeroed-out assist as a plain bodyweight set', () => {
+    expect(formatSet({ ...base, weightLbs: 0, reps: 6 }, 'bodyweight')).toBe('6');
+  });
+
   it('leaves effort out of the sentence form', () => {
     // SetValue renders RIR as its own column. Repeating it here turned the
     // joined "Last: …" line into 155×12 · 1 RIR, 155×12 · 0 RIR, … which is
@@ -95,5 +104,23 @@ describe('round1', () => {
   it('rounds to one decimal', () => {
     expect(round1(180.04)).toBe(180);
     expect(round1(262.55)).toBe(262.6);
+  });
+});
+
+describe('loadLabel', () => {
+  it('names added weight the way it always has', () => {
+    expect(loadLabel(140)).toBe('140 lb');
+  });
+
+  it('names a negative load as assistance rather than a negative weight', () => {
+    expect(loadLabel(-40)).toBe('40 lb assist');
+  });
+
+  it('names no load at all as bodyweight', () => {
+    expect(loadLabel(0)).toBe('bodyweight');
+  });
+
+  it('rounds to one decimal, as every other load in the app does', () => {
+    expect(loadLabel(-2.55)).toBe('2.6 lb assist');
   });
 });

@@ -36,6 +36,19 @@ export function round1(n: number): number {
   return Math.round(n * 10) / 10;
 }
 
+/**
+ * A load, in words. Negative means assistance rather than a negative weight,
+ * so progression notes read "Try 30 lb assist" instead of "Try -30 lb". See
+ * lib/assist.ts for what the sign means.
+ */
+export function loadLabel(lbs: number): string {
+  // Rounded by magnitude, not by value: Math.round breaks halves toward +∞, so
+  // rounding -2.55 directly gives 2.5 lb of assist against 2.6 lb of weight.
+  const magnitude = round1(Math.abs(lbs));
+  if (magnitude === 0) return 'bodyweight';
+  return lbs < 0 ? `${magnitude} lb assist` : `${magnitude} lb`;
+}
+
 export function metricLabel(metric: MetricKey): string {
   switch (metric) {
     case 'e1rm':
@@ -62,7 +75,12 @@ export function formatSet(set: SetLog, type: ExerciseType): string {
     return set.weightLbs !== undefined ? `${base} @ ${set.weightLbs} lb` : base;
   }
   if (type === 'bodyweight') {
-    return set.weightLbs !== undefined ? `+${set.weightLbs}×${set.reps ?? 0}` : `${set.reps ?? 0}`;
+    const w = set.weightLbs;
+    // Zero is a bodyweight set that happens to have been written down — it
+    // reads as "6", not "+0×6".
+    if (w === undefined || w === 0) return `${set.reps ?? 0}`;
+    const sign = w < 0 ? '−' : '+';
+    return `${sign}${Math.abs(w)}×${set.reps ?? 0}`;
   }
   return `${set.weightLbs ?? 0}×${set.reps ?? 0}`;
 }

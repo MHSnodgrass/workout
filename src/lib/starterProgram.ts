@@ -56,7 +56,7 @@ export const STARTER_EXERCISES: StarterExercise[] = [
   // Monday
   { name: 'Back Squat', type: 'weighted', defaultRestSeconds: 180, muscleGroups: ['Quads', 'Glutes'], incrementLbs: 5, barLbs: BAR },
   { name: 'Bench Press', type: 'weighted', defaultRestSeconds: 180, muscleGroups: ['Chest'], incrementLbs: 2.5, barLbs: BAR },
-  { name: 'Pull-up', type: 'bodyweight', defaultRestSeconds: 90, muscleGroups: ['Back'] },
+  { name: 'Pull-up', type: 'bodyweight', defaultRestSeconds: 90, muscleGroups: ['Back'], incrementLbs: 10 },
   { name: 'EZ-Bar Curl', type: 'weighted', defaultRestSeconds: 75, muscleGroups: ['Biceps'], barLbs: EZ_BAR },
   { name: 'Rope Pushdown', type: 'weighted', defaultRestSeconds: 75, muscleGroups: ['Triceps'] },
   { name: 'Hanging Leg Raise', type: 'bodyweight', defaultRestSeconds: 60, muscleGroups: ['Core'] },

@@ -165,14 +165,20 @@ function ExerciseLibRow({ exercise }: { exercise: Exercise }) {
         <span>· rest</span>
         <input type="number" value={rest} onChange={(e) => setRest(e.target.value)} onBlur={save} />
         <span>s</span>
-        {exercise.type === 'weighted' && (
+        {exercise.type !== 'timed' && (
           <>
-            <span>· +</span>
+            {/* On a bodyweight exercise this is the assistance step — how much
+                help comes off when you top the rep range. See lib/assist.ts. */}
+            <span>· {exercise.type === 'bodyweight' ? 'step' : '+'}</span>
             <input
               type="number"
               inputMode="decimal"
-              placeholder="5"
-              aria-label="Weight added by progression suggestions"
+              placeholder={exercise.type === 'bodyweight' ? '10' : '5'}
+              aria-label={
+                exercise.type === 'bodyweight'
+                  ? 'Assistance removed by progression suggestions'
+                  : 'Weight added by progression suggestions'
+              }
               value={increment}
               onChange={(e) => setIncrement(e.target.value)}
               onBlur={save}

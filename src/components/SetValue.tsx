@@ -11,8 +11,9 @@ import { formatSet } from '../lib/format';
  */
 export default function SetValue({ set, type }: { set: SetLog; type: ExerciseType }) {
   const effort = formatRir(set.rir);
+  const label = assistLabel(set, type) ?? formatSet(set, type);
   return (
-    <span className="value" aria-label={effort === '' ? formatSet(set, type) : `${formatSet(set, type)}, ${effort}`}>
+    <span className="value" aria-label={effort === '' ? label : `${label}, ${effort}`}>
       {parts(set, type)}
       {effort !== '' && <span className="rir">{effort}</span>}
     </span>
@@ -36,11 +37,13 @@ function parts(set: SetLog, type: ExerciseType) {
     );
   }
   if (type === 'bodyweight') {
+    const w = set.weightLbs;
     return (
       <>
-        {set.weightLbs !== undefined && (
+        {w !== undefined && w !== 0 && (
           <>
-            +{set.weightLbs}
+            {w < 0 ? '−' : '+'}
+            {Math.abs(w)}
             <span className="unit">lb</span>
             <span className="op">×</span>
           </>
@@ -58,4 +61,14 @@ function parts(set: SetLog, type: ExerciseType) {
       {set.reps ?? 0}
     </>
   );
+}
+
+/**
+ * "−40×6" is the right thing to see and the wrong thing to hear: a screen
+ * reader announces the minus without saying what was taken off. Assisted sets
+ * get the word instead. See lib/assist.ts.
+ */
+function assistLabel(set: SetLog, type: ExerciseType): string | null {
+  if (type !== 'bodyweight' || set.weightLbs === undefined || set.weightLbs >= 0) return null;
+  return `${Math.abs(set.weightLbs)} lb assist, ${set.reps ?? 0} reps`;
 }

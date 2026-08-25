@@ -183,6 +183,129 @@ describe('suggestNext — bodyweight', () => {
   });
 });
 
+describe('suggestNext — assisted bodyweight', () => {
+  /** The starter program's pull-up: 3 sets of 4–6, one 10 lb machine pin. */
+  const pullup = target({ targetRepsMin: 4, targetRepsMax: 6 });
+  const assisted = (sets: Array<[number, number]>) =>
+    lastTime(sets.map(([weightLbs, reps]) => ({ weightLbs, reps })));
+
+  it('takes a pin off the stack once every target set hit the top of the range', () => {
+    const last = assisted([
+      [-40, 6],
+      [-40, 6],
+      [-40, 6],
+    ]);
+
+    const s = suggestNext([last], pullup, exercise('bodyweight'), 10);
+
+    expect(s).toEqual({
+      weightLbs: -30,
+      reps: 4,
+      note: 'Try 30 lb assist — you hit 3×6 last time',
+    });
+  });
+
+  it('holds the assistance when a set came up short', () => {
+    const last = assisted([
+      [-40, 6],
+      [-40, 6],
+      [-40, 4],
+    ]);
+
+    const s = suggestNext([last], pullup, exercise('bodyweight'), 10);
+
+    expect(s).toEqual({
+      weightLbs: -40,
+      reps: 6,
+      note: 'Stay at 40 lb assist — aim for 3×6',
+    });
+  });
+
+  it('treats the heaviest assistance as the load to beat, so a ramp stays honest', () => {
+    const last = assisted([
+      [-40, 6],
+      [-30, 6],
+      [-30, 6],
+    ]);
+
+    expect(suggestNext([last], pullup, exercise('bodyweight'), 10)?.weightLbs).toBe(-30);
+  });
+
+  it('counts a set logged without a weight as unassisted rather than giving up', () => {
+    // Dropping the assist for the last set is a real session, not a data gap —
+    // the weighted rule would have refused to suggest anything at all.
+    const last = lastTime([
+      { weightLbs: -40, reps: 6 },
+      { weightLbs: -40, reps: 6 },
+      { reps: 6 },
+    ]);
+
+    expect(suggestNext([last], pullup, exercise('bodyweight'), 10)?.weightLbs).toBe(-30);
+  });
+
+  it('stops at zero rather than suggesting less assistance than none', () => {
+    const last = assisted([
+      [-5, 6],
+      [-5, 6],
+      [-5, 6],
+    ]);
+
+    const s = suggestNext([last], pullup, exercise('bodyweight'), 10);
+
+    expect(s).toEqual({
+      weightLbs: 0,
+      reps: 4,
+      note: 'Try bodyweight — you hit 3×6 last time',
+    });
+  });
+
+  it('hands back to the rep rule once the assist is gone', () => {
+    const last = assisted([
+      [0, 6],
+      [0, 6],
+      [0, 6],
+    ]);
+
+    const s = suggestNext([last], pullup, exercise('bodyweight'), 10);
+
+    expect(s).toEqual({ addSet: true, reps: 6, note: 'You hit 3×6 — try a 4th set' });
+  });
+
+  it('leaves added weight on a bodyweight exercise alone', () => {
+    const last = assisted([
+      [25, 6],
+      [25, 6],
+      [25, 6],
+    ]);
+
+    expect(suggestNext([last], pullup, exercise('bodyweight'), 10)?.weightLbs).toBeUndefined();
+  });
+
+  it('gives back a pin after the stall threshold, instead of deloading toward zero', () => {
+    const stuck = (id: number) => ({
+      session: { id, routineId: 1, startedAt: id * 1_000, finishedAt: id * 1_000 + 500 },
+      sets: [6, 6, 4].map((reps, i) => ({
+        id: id * 100 + i,
+        sessionId: id,
+        exerciseId: 1,
+        setNumber: i + 1,
+        weightLbs: -40,
+        reps,
+        loggedAt: id * 1_000,
+      })),
+    });
+
+    const s = suggestNext([stuck(1), stuck(2), stuck(3)], pullup, exercise('bodyweight'), 10, 3);
+
+    expect(s).toEqual({
+      weightLbs: -50,
+      reps: 4,
+      deload: true,
+      note: 'Deload to 50 lb assist — 3 sessions stuck at 40 lb assist',
+    });
+  });
+});
+
 describe('suggestNext — timed', () => {
   const timedTarget = target({
     targetRepsMin: undefined,

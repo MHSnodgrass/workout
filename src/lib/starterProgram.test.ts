@@ -126,6 +126,10 @@ describe('exercise settings', () => {
     expect(starterExercise('Rope Pushdown')?.incrementLbs).toBeUndefined();
   });
 
+  it('steps the pull-up by a machine pin, so assisted reps have something to progress by', () => {
+    expect(starterExercise('Pull-up')?.incrementLbs).toBe(10);
+  });
+
   it('rests longer on the heavy compounds than on the isolation work', () => {
     expect(starterExercise('Deadlift')?.defaultRestSeconds).toBe(210);
     expect(starterExercise('Rope Pushdown')?.defaultRestSeconds).toBe(75);
